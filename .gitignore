@@ -68,8 +68,7 @@ firebase.json
 firestore.rules
 firestore.indexes.json
 storage.rules
-functions/node_modules/
-functions/lib/
+functions/
 .firebase/
 .firebaserc
 
