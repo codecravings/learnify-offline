@@ -1,0 +1,94 @@
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+**/generated_plugin_registrant.dart
+*.g.dart
+*.freezed.dart
+pubspec.lock.backup
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+
+# Android
+android/.gradle/
+android/captures/
+android/gradlew
+android/gradlew.bat
+android/gradle/
+android/local.properties
+android/key.properties
+android/**/GeneratedPluginRegistrant.java
+android/app/debug
+android/app/profile
+android/app/release
+android/app/google-services.json
+*.jks
+*.keystore
+
+# iOS
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/Generated.xcconfig
+ios/Flutter/ephemeral/
+ios/Flutter/app.flx
+ios/Flutter/app.zip
+ios/Flutter/flutter_assets/
+ios/ServiceDefinitions.json
+ios/Runner/GeneratedPluginRegistrant.*
+ios/Pods/
+ios/Podfile.lock
+ios/.symlinks/
+
+# macOS / Linux / Windows (not targeting)
+macos/
+linux/
+windows/
+web/
+
+# Secrets & API keys
+*.env
+*.env.*
+hindsight.txt
+openai.txt
+google-services.json
+GoogleService-Info.plist
+secrets.properties
+
+# Firebase (removed from project, keep ignored)
+firebase.json
+firestore.rules
+firestore.indexes.json
+storage.rules
+functions/node_modules/
+functions/lib/
+.firebase/
+.firebaserc
+
+# Legacy / historical artifacts (not part of this submission)
+*.pptx
+make_ppt.py
+fill_template.py
+hackathon_template/
+VidyaSetu_Recursion7*
+Learnify_DEADSEC*
+CodeCrafter3*
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+log/
