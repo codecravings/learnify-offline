@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "47440299911",
+    "project_id": "hire-horizon-c47c7",
+    "storage_bucket": "hire-horizon-c47c7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:47440299911:android:799c592d9876ce6df1b522",
+        "android_client_info": {
+          "package_name": "com.vidyasetu.vidyasetu"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDfQXHv4WJcEowgNFicDm9UTwftHmbcUUo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
