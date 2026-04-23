@@ -19,6 +19,7 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen>
   String _status = 'Preparing download...';
   bool _downloading = false;
   bool _error = false;
+  bool _hasSideloadedFile = false;
   late AnimationController _pulseCtrl;
 
   @override
@@ -28,6 +29,49 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen>
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
+    _checkSideloadedFile();
+  }
+
+  Future<void> _checkSideloadedFile() async {
+    final found = await GemmaService.instance.hasSideloadedFile();
+    if (mounted) setState(() => _hasSideloadedFile = found);
+  }
+
+  Future<void> _importFromFile() async {
+    setState(() {
+      _downloading = true;
+      _error = false;
+      _status = 'Importing model from device storage...';
+      _progress = 0;
+    });
+    try {
+      await GemmaService.instance.initializeFromFile(
+        onProgress: (p) {
+          if (!mounted) return;
+          setState(() {
+            _progress = p / 100;
+            if (p < 70) {
+              _status = 'Copying model to app storage: ${p.round()}%';
+            } else if (p < 80) {
+              _status = 'Registering model...';
+            } else if (p < 100) {
+              _status = 'Warming up engine (10–30s)...';
+            } else {
+              _status = 'Ready!';
+            }
+          });
+        },
+      );
+      if (!mounted) return;
+      context.go('/setup/profile');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = true;
+        _downloading = false;
+        _status = 'Import failed: $e';
+      });
+    }
   }
 
   @override
@@ -153,6 +197,43 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen>
                     child: Text(_status,
                         style: const TextStyle(color: Colors.redAccent, fontSize: 13)),
                   ),
+                if (_hasSideloadedFile) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _importFromFile,
+                      icon: const Icon(Icons.offline_bolt_rounded),
+                      label: const Text(
+                        'Import model from device (instant)',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.accentGreen,
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Center(
+                    child: Text(
+                      'Model file detected — no network needed.',
+                      style: TextStyle(color: AppTheme.accentGreen, fontSize: 12),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(children: [
+                    Expanded(child: Divider(color: Colors.white12)),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text('or', style: TextStyle(color: Colors.white38)),
+                    ),
+                    Expanded(child: Divider(color: Colors.white12)),
+                  ]),
+                  const SizedBox(height: 20),
+                ],
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
