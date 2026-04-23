@@ -57,6 +57,20 @@ class GemmaService {
     return '${docs.path}/$_modelId';
   }
 
+  /// Resolve the first readable sideloaded file path, or null.
+  /// Prefers the internal copy (always readable) over the external sdcard
+  /// path (blocked by scoped storage on Android 11+ when pushed by adb).
+  Future<String?> findSideloadedFile() async {
+    try {
+      final internal = await _internalModelPath();
+      if (await File(internal).exists()) return internal;
+    } catch (_) {}
+    try {
+      if (await File(sideloadedPath).exists()) return sideloadedPath;
+    } catch (_) {}
+    return null;
+  }
+
   /// Check whether a sideloaded .litertlm file is present at the expected path.
   Future<bool> hasSideloadedFile() async {
     try {
