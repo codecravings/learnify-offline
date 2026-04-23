@@ -143,13 +143,63 @@ Make the lesson engaging and cover all concepts thoroughly.
   // ── EXPLORER AGENT (topic breakdown) ─────────────────────────────────────
 
   Future<List<Map<String, dynamic>>> exploreTopic(String topic) async {
-    final raw = await _gemma.generate(
-      systemPrompt: AgentPrompts.explorer(language: _lang),
-      userPrompt:
-          'Break this topic into 6–8 sub-topics a student should study: $topic',
+    Future<String> run(String userMsg) => _gemma.generate(
+          systemPrompt: AgentPrompts.explorer(language: _lang),
+          userPrompt: userMsg,
+          maxTokens: 3072,
+        );
+
+    Map<String, dynamic> coerceItem(dynamic item) {
+      // Gemma sometimes returns bare strings instead of objects — wrap them.
+      if (item is String) {
+        return {
+          'title': item,
+          'description': '',
+          'emoji': '📌',
+          'difficulty': 'beginner',
+        };
+      }
+      if (item is Map) return Map<String, dynamic>.from(item);
+      return {'title': item.toString(), 'description': '', 'emoji': '📌', 'difficulty': 'beginner'};
+    }
+
+    List<Map<String, dynamic>> extract(dynamic decoded) {
+      if (decoded is List) return decoded.map(coerceItem).toList();
+      if (decoded is Map<String, dynamic>) {
+        for (final key in const [
+          'subtopics',
+          'sub_topics',
+          'subTopics',
+          'topics',
+          'items',
+          'list',
+        ]) {
+          final v = decoded[key];
+          if (v is List && v.isNotEmpty) {
+            return v.map(coerceItem).toList();
+          }
+        }
+      }
+      return const [];
+    }
+
+    final raw = await run(
+      'Topic: "$topic". Output the JSON object now. Begin your response with { and nothing else. Include 6 to 8 entries in "subtopics".',
     );
-    final parsed = _parseJson(raw);
-    return List<Map<String, dynamic>>.from(parsed['subtopics'] ?? []);
+    final result = extract(_tryParse(raw));
+
+    if (result.isEmpty) {
+      throw const FormatException('Explorer returned 0 sub-topics.');
+    }
+    return result;
+  }
+
+  dynamic _tryParse(String raw) {
+    try {
+      return _parseJsonAny(raw);
+    } catch (_) {
+      return null;
+    }
   }
 
   // ── PLANNER AGENT ───────────────────────────────────────────────────────────
@@ -287,17 +337,56 @@ Requirements: 5–8 scenes, every concept with a real-world example, 3 quiz ques
   }
 
   Map<String, dynamic> _parseJson(String raw) {
-    // Strip markdown fences if present
-    var cleaned = raw.trim();
-    if (cleaned.startsWith('```')) {
-      cleaned = cleaned
-          .replaceFirst(RegExp(r'^```[a-z]*\n?'), '')
-          .replaceFirst(RegExp(r'\n?```$'), '')
-          .trim();
+    final decoded = _parseJsonAny(raw);
+    if (decoded is Map<String, dynamic>) return decoded;
+    throw const FormatException('Expected JSON object');
+  }
+
+  /// Extracts the first balanced JSON object or array from [raw] and decodes
+  /// it. Gemma often prefixes output with natural language ("Here's the
+  /// breakdown...") and/or wraps it in markdown fences — both are stripped.
+  dynamic _parseJsonAny(String raw) {
+    var s = raw.trim();
+    // Strip markdown fences anywhere in the string
+    s = s.replaceAll(RegExp(r'```[a-zA-Z]*\n?'), '').replaceAll('```', '').trim();
+
+    // Find the first { or [ and its balanced closer
+    final startIdx = s.indexOf(RegExp(r'[\[{]'));
+    if (startIdx < 0) {
+      throw FormatException('No JSON found in response: '
+          '${s.substring(0, s.length.clamp(0, 120))}');
     }
-    // Find first { or [
-    final start = cleaned.indexOf(RegExp(r'[\[{]'));
-    if (start > 0) cleaned = cleaned.substring(start);
-    return jsonDecode(cleaned) as Map<String, dynamic>;
+    final opener = s[startIdx];
+    final closer = opener == '{' ? '}' : ']';
+    var depth = 0;
+    var inStr = false;
+    var esc = false;
+    var endIdx = -1;
+    for (var i = startIdx; i < s.length; i++) {
+      final c = s[i];
+      if (inStr) {
+        if (esc) {
+          esc = false;
+        } else if (c == '\\') {
+          esc = true;
+        } else if (c == '"') {
+          inStr = false;
+        }
+        continue;
+      }
+      if (c == '"') {
+        inStr = true;
+      } else if (c == opener) {
+        depth++;
+      } else if (c == closer) {
+        depth--;
+        if (depth == 0) {
+          endIdx = i;
+          break;
+        }
+      }
+    }
+    final body = endIdx > 0 ? s.substring(startIdx, endIdx + 1) : s.substring(startIdx);
+    return jsonDecode(body);
   }
 }
