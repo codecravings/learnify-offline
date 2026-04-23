@@ -183,13 +183,26 @@ Make the lesson engaging and cover all concepts thoroughly.
       return const [];
     }
 
-    final raw = await run(
+    String raw = await run(
       'Topic: "$topic". Output the JSON object now. Begin your response with { and nothing else. Include 6 to 8 entries in "subtopics".',
     );
-    final result = extract(_tryParse(raw));
+    debugPrint('[Explorer] raw 1: ${raw.substring(0, raw.length.clamp(0, 300))}');
+    var result = extract(_tryParse(raw));
+
+    // Retry once if we got nothing usable (empty list or unparseable).
+    if (result.isEmpty) {
+      raw = await run(
+        'Your previous response was unusable. Topic: "$topic". '
+        'Output ONLY a JSON object with key "subtopics" containing a non-empty '
+        'array of 6 to 8 objects. Start with { and end with }.',
+      );
+      debugPrint('[Explorer] raw 2: ${raw.substring(0, raw.length.clamp(0, 300))}');
+      result = extract(_tryParse(raw));
+    }
 
     if (result.isEmpty) {
-      throw const FormatException('Explorer returned 0 sub-topics.');
+      throw FormatException(
+          'Explorer returned 0 sub-topics. Last response: ${raw.substring(0, raw.length.clamp(0, 200))}');
     }
     return result;
   }
