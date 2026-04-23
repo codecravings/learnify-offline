@@ -168,19 +168,18 @@ class GemmaService {
   Future<void> initialize({void Function(double)? onProgress}) async {
     if (_modelReady) return;
 
-    final installed = await FlutterGemma.isModelInstalled(_modelId);
-    if (!installed) {
-      await FlutterGemma.installModel(
-        modelType: ModelType.gemmaIt,
-        fileType: ModelFileType.litertlm,
-      )
-          .fromNetwork(
-            _modelUrl,
-            token: _hfToken.isNotEmpty ? _hfToken : null,
-          )
-          .withProgress((p) => onProgress?.call(p.toDouble()))
-          .install();
-    }
+    // install() is idempotent — skips the download if already installed
+    // but always sets the active session for this process.
+    await FlutterGemma.installModel(
+      modelType: ModelType.gemmaIt,
+      fileType: ModelFileType.litertlm,
+    )
+        .fromNetwork(
+          _modelUrl,
+          token: _hfToken.isNotEmpty ? _hfToken : null,
+        )
+        .withProgress((p) => onProgress?.call(p.toDouble()))
+        .install();
 
     _modelReady = FlutterGemma.hasActiveModel();
     debugPrint('[Gemma] Model ready: $_modelReady');
