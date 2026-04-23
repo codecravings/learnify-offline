@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
 
@@ -26,6 +28,20 @@ class GemmaService {
     await FlutterGemma.initialize(
       huggingFaceToken: _hfToken.isNotEmpty ? _hfToken : null,
     );
+  }
+
+  /// Path for the sideloaded model (pushed via adb or Files app).
+  /// On Android this is the app-specific external storage, no permissions needed.
+  static const sideloadedPath =
+      '/storage/emulated/0/Android/data/com.vidyasetu.vidyasetu/files/gemma-4-E4B-it.litertlm';
+
+  /// Check whether a sideloaded .litertlm file is present at the expected path.
+  Future<bool> hasSideloadedFile() async {
+    try {
+      return await File(sideloadedPath).exists();
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Call from the setup screen to download + activate the model.
