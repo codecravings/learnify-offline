@@ -31,24 +31,42 @@ class GemmaService {
     );
   }
 
-  /// If the model was already installed in a prior launch, re-activate it
-  /// and mark the service ready. Safe to call on every app start —
-  /// noops when no model is installed yet (setup flow handles that case).
+  /// Re-activate a previously installed model on cold launch.
+  /// flutter_gemma's active-session state is process-local, so even when the
+  /// model is "installed" we need to re-run installModel() + getActiveModel()
+  /// every launch. Falls through to a silent re-import from the local file
+  /// when one is present so the user doesn't have to tap Import again.
   Future<void> resumeIfInstalled() async {
     if (_modelReady) return;
     try {
+      // Fast path — already installed, just warm the engine.
       if (await FlutterGemma.isModelInstalled(_modelId)) {
-        await FlutterGemma.getActiveModel(maxTokens: 2048);
-        _modelReady = FlutterGemma.hasActiveModel();
-        debugPrint('[Gemma] Resumed installed model: $_modelReady');
+        try {
+          await FlutterGemma.getActiveModel(maxTokens: 2048);
+          _modelReady = FlutterGemma.hasActiveModel();
+          if (_modelReady) {
+            debugPrint('[Gemma] Resumed installed model (fast path)');
+            return;
+          }
+        } catch (e) {
+          debugPrint('[Gemma] Fast resume failed, falling back: $e');
+        }
+      }
+
+      // Fallback — re-import from the local file (idempotent, skips copy).
+      if (await findSideloadedFile() != null) {
+        debugPrint('[Gemma] Resuming via full init from local file...');
+        await initializeFromFile();
       }
     } catch (e) {
       debugPrint('[Gemma] resumeIfInstalled failed: $e');
     }
   }
 
-  /// Path for the sideloaded model (pushed via adb or Files app).
-  /// On Android this is the app-specific external storage, no permissions needed.
+  /// Legacy external sideload path (pushed via `adb push`).
+  /// On Android 11+ the app process can't always read this location (scoped
+  /// storage + SELinux), so we also check an internal documents path that
+  /// the app *always* has access to.
   static const sideloadedPath =
       '/storage/emulated/0/Android/data/com.vidyasetu.vidyasetu/files/gemma-4-E4B-it.litertlm';
 
@@ -58,9 +76,8 @@ class GemmaService {
   }
 
   /// Resolve the first readable sideloaded file path, or null.
-  /// Prefers the internal copy (always readable) over the external sdcard
-  /// path (blocked by scoped storage on Android 11+ when pushed by adb).
   Future<String?> findSideloadedFile() async {
+    // Prefer the internal copy if it's already there (fast, always readable).
     try {
       final internal = await _internalModelPath();
       if (await File(internal).exists()) return internal;
