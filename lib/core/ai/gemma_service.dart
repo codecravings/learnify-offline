@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
+import 'package:path_provider/path_provider.dart';
 
 /// Wraps flutter_gemma for on-device Gemma 4 E4B inference.
 ///
@@ -42,6 +43,95 @@ class GemmaService {
     } catch (_) {
       return false;
     }
+  }
+
+  /// Install the model from a pre-pushed file on device — zero network.
+  /// Eagerly loads the engine into RAM so errors surface here, not on first chat.
+  Future<void> initializeFromFile({
+    String? filePath,
+    void Function(double)? onProgress,
+  }) async {
+    if (_modelReady) return;
+    final src = filePath ?? sideloadedPath;
+    final sw = Stopwatch()..start();
+
+    if (!await File(src).exists()) {
+      throw StateError('No model file found at $src');
+    }
+    debugPrint('[Gemma] Source file OK (${sw.elapsedMilliseconds}ms)');
+
+    // sdcard memory-mapping is flaky on Android — copy once to internal
+    // app storage, then use that fast path for all future launches.
+    onProgress?.call(5);
+    final localPath = await _ensureLocalCopy(src, (p) {
+      // p is 0..100 for the copy phase — map to overall 5..70.
+      onProgress?.call(5 + p * 0.65);
+    });
+    debugPrint('[Gemma] Local copy ready at $localPath '
+        '(${sw.elapsedMilliseconds}ms total)');
+
+    onProgress?.call(72);
+    final installed = await FlutterGemma.isModelInstalled(_modelId);
+    if (!installed) {
+      await FlutterGemma.installModel(
+        modelType: ModelType.gemmaIt,
+        fileType: ModelFileType.litertlm,
+      ).fromFile(localPath).install();
+    }
+    debugPrint('[Gemma] installModel done (${sw.elapsedMilliseconds}ms total)');
+
+    // Force-load into RAM now so the next call is instant + errors are caught.
+    onProgress?.call(80);
+    try {
+      await FlutterGemma.getActiveModel(maxTokens: 2048);
+    } catch (e) {
+      throw StateError('Engine init failed: $e');
+    }
+    debugPrint('[Gemma] Engine warm (${sw.elapsedMilliseconds}ms total)');
+
+    onProgress?.call(100);
+    _modelReady = FlutterGemma.hasActiveModel();
+    debugPrint('[Gemma] Model ready (from file): $_modelReady');
+  }
+
+  /// Copies the sideloaded model from external storage to the app's internal
+  /// documents dir for fast mmap. Skips if already copied.
+  Future<String> _ensureLocalCopy(
+    String src,
+    void Function(double) onPercent,
+  ) async {
+    final docs = await getApplicationDocumentsDirectory();
+    final dst = '${docs.path}/$_modelId';
+    final dstFile = File(dst);
+    final srcFile = File(src);
+
+    if (await dstFile.exists()) {
+      final srcSize = await srcFile.length();
+      final dstSize = await dstFile.length();
+      if (srcSize == dstSize) {
+        debugPrint('[Gemma] Local copy already present, skipping copy');
+        onPercent(100);
+        return dst;
+      }
+      await dstFile.delete();
+    }
+
+    final total = await srcFile.length();
+    final sink = dstFile.openWrite();
+    var copied = 0;
+    var lastReport = 0;
+    await for (final chunk in srcFile.openRead()) {
+      sink.add(chunk);
+      copied += chunk.length;
+      final pct = (copied / total * 100).round();
+      if (pct != lastReport) {
+        lastReport = pct;
+        onPercent(pct.toDouble());
+      }
+    }
+    await sink.flush();
+    await sink.close();
+    return dst;
   }
 
   /// Call from the setup screen to download + activate the model.
