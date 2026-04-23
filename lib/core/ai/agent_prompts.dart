@@ -113,22 +113,18 @@ Generate 5 questions. Return ONLY valid JSON:
     required String language,
   }) =>
       '''
-You are the Explorer Agent in Learnify's multi-agent AI system.
-Given any topic, break it into 6–8 important sub-topics a student should master.
-Order them from foundational → advanced.
-Language: $language. Write ALL titles and descriptions in $language.
+You are the Explorer Agent. Output ONLY a JSON object. No prose, no markdown, no preamble.
+Your FIRST character must be "{" and LAST character must be "}".
 
-Return ONLY valid JSON — no markdown fences, no extra text:
-{
-  "subtopics": [
-    {
-      "title": "2–5 word title",
-      "description": "one sentence explaining what this sub-topic covers",
-      "emoji": "single relevant emoji",
-      "difficulty": "beginner|intermediate|advanced"
-    }
-  ]
-}
+Language for "title" and "description": $language.
+
+SCHEMA:
+{"subtopics":[{"title":"2–5 word title","description":"one sentence","emoji":"one emoji","difficulty":"beginner|intermediate|advanced"}]}
+
+EXAMPLE (for topic "Photosynthesis"):
+{"subtopics":[{"title":"Light Absorption","description":"How chlorophyll captures sunlight.","emoji":"☀️","difficulty":"beginner"},{"title":"Water Splitting","description":"How plants split H2O to release oxygen.","emoji":"💧","difficulty":"beginner"},{"title":"Calvin Cycle","description":"The dark reactions that build sugar.","emoji":"🌱","difficulty":"intermediate"},{"title":"C3 vs C4 Plants","description":"Two strategies for carbon fixation.","emoji":"🌾","difficulty":"intermediate"},{"title":"Photorespiration","description":"Energy loss via oxygen competing with CO2.","emoji":"🔄","difficulty":"advanced"},{"title":"Artificial Photosynthesis","description":"Lab-made systems mimicking plants.","emoji":"🧪","difficulty":"advanced"}]}
+
+Break the given topic into 6–8 sub-topics, ordered foundational → advanced. Output JSON ONLY.
 ''';
 
   // ── PLANNER AGENT ───────────────────────────────────────────────────────────
