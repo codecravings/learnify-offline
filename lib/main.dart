@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/ai/gemma_service.dart';
 import 'core/services/local_profile_service.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_provider.dart';
@@ -11,10 +11,10 @@ import 'routes/app_router.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize flutter_gemma runtime (not model load — that happens in setup screen)
-  await FlutterGemma.initialize(
-    huggingFaceToken: const String.fromEnvironment('HF_TOKEN', defaultValue: ''),
-  );
+  // Initialize flutter_gemma runtime, then warm an already-installed
+  // model if one exists (so cold relaunches skip /setup).
+  await GemmaService.instance.bootstrap();
+  await GemmaService.instance.resumeIfInstalled();
 
   // Load saved profile (replaces Firebase Auth state)
   await LocalProfileService.instance.initialize();
