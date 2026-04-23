@@ -294,11 +294,14 @@ class _RequirementCard extends StatelessWidget {
   Widget _req(String label, String value) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('$label: ',
                 style: const TextStyle(color: Colors.white54, fontSize: 13)),
-            Text(value,
-                style: const TextStyle(color: Colors.white, fontSize: 13)),
+            Expanded(
+              child: Text(value,
+                  style: const TextStyle(color: Colors.white, fontSize: 13)),
+            ),
           ],
         ),
       );
