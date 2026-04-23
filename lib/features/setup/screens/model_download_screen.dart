@@ -117,7 +117,7 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen>
     return Scaffold(
       backgroundColor: AppTheme.backgroundPrimary,
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(28),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
