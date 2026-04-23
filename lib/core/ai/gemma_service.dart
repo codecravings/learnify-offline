@@ -81,13 +81,13 @@ class GemmaService {
     void Function(double)? onProgress,
   }) async {
     if (_modelReady) return;
-    final src = filePath ?? sideloadedPath;
+    final src = filePath ?? await findSideloadedFile();
     final sw = Stopwatch()..start();
 
-    if (!await File(src).exists()) {
-      throw StateError('No model file found at $src');
+    if (src == null || !await File(src).exists()) {
+      throw StateError('No model file found (tried internal + external paths)');
     }
-    debugPrint('[Gemma] Source file OK (${sw.elapsedMilliseconds}ms)');
+    debugPrint('[Gemma] Source file: $src (${sw.elapsedMilliseconds}ms)');
 
     // sdcard memory-mapping is flaky on Android — copy once to internal
     // app storage, then use that fast path for all future launches.
