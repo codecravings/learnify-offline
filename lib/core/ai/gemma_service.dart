@@ -99,14 +99,14 @@ class GemmaService {
     debugPrint('[Gemma] Local copy ready at $localPath '
         '(${sw.elapsedMilliseconds}ms total)');
 
+    // installModel().install() is idempotent — skips the copy if already
+    // installed but always sets this model as the active session, which is
+    // required after every cold app launch (session is process-local).
     onProgress?.call(72);
-    final installed = await FlutterGemma.isModelInstalled(_modelId);
-    if (!installed) {
-      await FlutterGemma.installModel(
-        modelType: ModelType.gemmaIt,
-        fileType: ModelFileType.litertlm,
-      ).fromFile(localPath).install();
-    }
+    await FlutterGemma.installModel(
+      modelType: ModelType.gemmaIt,
+      fileType: ModelFileType.litertlm,
+    ).fromFile(localPath).install();
     debugPrint('[Gemma] installModel done (${sw.elapsedMilliseconds}ms total)');
 
     // Force-load into RAM now so the next call is instant + errors are caught.
