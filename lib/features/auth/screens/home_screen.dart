@@ -568,13 +568,16 @@ class _HomeDashboardState extends State<HomeDashboard>
                 children: [
                   Row(
                     children: [
-                      Text(
-                        'SCAN TEXTBOOK',
-                        style: GoogleFonts.orbitron(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                          letterSpacing: 2,
+                      Flexible(
+                        child: Text(
+                          'SCAN TEXTBOOK',
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.orbitron(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            letterSpacing: 2,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 6),
