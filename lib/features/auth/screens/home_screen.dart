@@ -438,16 +438,19 @@ class _HomeDashboardState extends State<HomeDashboard>
                     color: Colors.white, size: 18),
               ),
               const SizedBox(width: 10),
-              Text(
-                'LEARN ANYTHING',
-                style: GoogleFonts.orbitron(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.accentCyan,
-                  letterSpacing: 2,
+              Expanded(
+                child: Text(
+                  'LEARN ANYTHING',
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.orbitron(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.accentCyan,
+                    letterSpacing: 2,
+                  ),
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: 6),
               _pill('ON-DEVICE', AppTheme.accentGreen),
             ],
           ),
