@@ -71,14 +71,8 @@ class GemmaService {
     return null;
   }
 
-  /// Check whether a sideloaded .litertlm file is present at the expected path.
-  Future<bool> hasSideloadedFile() async {
-    try {
-      return await File(sideloadedPath).exists();
-    } catch (_) {
-      return false;
-    }
-  }
+  Future<bool> hasSideloadedFile() async =>
+      (await findSideloadedFile()) != null;
 
   /// Install the model from a pre-pushed file on device — zero network.
   /// Eagerly loads the engine into RAM so errors surface here, not on first chat.
