@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/ai/gemma_service.dart';
+import '../../../core/services/local_profile_service.dart';
 import '../../../core/theme/app_theme.dart';
 
 /// Downloads Gemma 4 E4B on first launch (~3.65 GB, one-time only).
@@ -63,7 +64,7 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen>
         },
       );
       if (!mounted) return;
-      context.go('/setup/profile');
+      context.go(LocalProfileService.instance.hasProfile ? '/home' : '/setup/profile');
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -101,7 +102,7 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen>
       );
 
       if (!mounted) return;
-      context.go('/setup/profile');
+      context.go(LocalProfileService.instance.hasProfile ? '/home' : '/setup/profile');
     } catch (e) {
       if (!mounted) return;
       setState(() {
