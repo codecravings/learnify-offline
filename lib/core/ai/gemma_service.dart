@@ -181,6 +181,7 @@ class GemmaService {
         .withProgress((p) => onProgress?.call(p.toDouble()))
         .install();
 
+    await FlutterGemma.getActiveModel(maxTokens: 2048);
     _modelReady = FlutterGemma.hasActiveModel();
     debugPrint('[Gemma] Model ready: $_modelReady');
   }
