@@ -31,6 +31,22 @@ class GemmaService {
     );
   }
 
+  /// If the model was already installed in a prior launch, re-activate it
+  /// and mark the service ready. Safe to call on every app start —
+  /// noops when no model is installed yet (setup flow handles that case).
+  Future<void> resumeIfInstalled() async {
+    if (_modelReady) return;
+    try {
+      if (await FlutterGemma.isModelInstalled(_modelId)) {
+        await FlutterGemma.getActiveModel(maxTokens: 2048);
+        _modelReady = FlutterGemma.hasActiveModel();
+        debugPrint('[Gemma] Resumed installed model: $_modelReady');
+      }
+    } catch (e) {
+      debugPrint('[Gemma] resumeIfInstalled failed: $e');
+    }
+  }
+
   /// Path for the sideloaded model (pushed via adb or Files app).
   /// On Android this is the app-specific external storage, no permissions needed.
   static const sideloadedPath =
