@@ -51,10 +51,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // Always allow setup screens
       if (loc.startsWith('/setup')) return null;
 
-      // No profile → download model first
-      if (!hasProfile && !modelReady) return AppRoutes.setup;
+      // Model must be loaded before any feature screen — if a cold relaunch
+      // couldn't resume it (e.g. flutter_gemma registry wiped but file still
+      // on disk), bounce back to setup so the user can re-import instantly.
+      if (!modelReady) return AppRoutes.setup;
 
-      // Profile created but model not ready (shouldn't happen normally)
+      // Model ready but no profile yet
       if (!hasProfile) return AppRoutes.setupProfile;
 
       return null;
