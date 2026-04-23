@@ -52,6 +52,11 @@ class GemmaService {
   static const sideloadedPath =
       '/storage/emulated/0/Android/data/com.vidyasetu.vidyasetu/files/gemma-4-E4B-it.litertlm';
 
+  Future<String> _internalModelPath() async {
+    final docs = await getApplicationDocumentsDirectory();
+    return '${docs.path}/$_modelId';
+  }
+
   /// Check whether a sideloaded .litertlm file is present at the expected path.
   Future<bool> hasSideloadedFile() async {
     try {
