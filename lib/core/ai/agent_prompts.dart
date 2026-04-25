@@ -141,6 +141,12 @@ SCHEMA:
 EXAMPLE (for topic "Photosynthesis", count=6):
 {"subtopics":[{"title":"Light Absorption","description":"How chlorophyll captures sunlight.","emoji":"☀️","difficulty":"beginner"},{"title":"Water Splitting","description":"How plants split H2O to release oxygen.","emoji":"💧","difficulty":"beginner"},{"title":"Calvin Cycle","description":"The dark reactions that build sugar.","emoji":"🌱","difficulty":"intermediate"},{"title":"C3 vs C4 Plants","description":"Two strategies for carbon fixation.","emoji":"🌾","difficulty":"intermediate"},{"title":"Photorespiration","description":"Energy loss via oxygen competing with CO2.","emoji":"🔄","difficulty":"advanced"},{"title":"Artificial Photosynthesis","description":"Lab-made systems mimicking plants.","emoji":"🧪","difficulty":"advanced"}]}
 
+RULES:
+- Use the field name "title" (NOT "name"). Use "description" (NOT "reason").
+- Every "title" must be a REAL concept name (2–5 words). NEVER use placeholders like "Sub-topic 1", "Topic 2", "Item N".
+- If you cannot think of a real sub-topic, do not emit that entry — but you MUST still produce $count entries total.
+- "description" must be a complete sentence about that specific concept.
+
 Break the given topic into EXACTLY $count sub-topics, ordered foundational → advanced. Output JSON ONLY.
 ''';
   }
