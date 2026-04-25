@@ -151,6 +151,40 @@ Break the given topic into EXACTLY $count sub-topics, ordered foundational → a
 ''';
   }
 
+  // ── SUBJECT SUGGESTER ───────────────────────────────────────────────────
+
+  /// Proposes 6–8 subject cards for the home/courses screens based on the
+  /// learner's profile. Pure JSON output — `{"subjects":[{name,emoji,reason}]}`.
+  static String subjectSuggester({
+    required String language,
+    required String grade,
+    required List<String> interests,
+    required List<Map<String, dynamic>> history,
+  }) {
+    final interestBlock = interests.isNotEmpty
+        ? 'Stated interests: ${interests.join(", ")}'
+        : 'Stated interests: (none)';
+    final historyBlock = history.isEmpty
+        ? 'Prior study history: (none)'
+        : 'Prior study history:\n${history.take(10).map((t) => "- ${t['name']} (accuracy ${t['accuracy']}%)").join("\n")}';
+
+    return '''
+You are the Subject Suggester. Output ONLY a JSON object. No prose, no markdown.
+FIRST char "{", LAST char "}".
+Language: $language.
+
+Grade / role: $grade
+$interestBlock
+$historyBlock
+
+Suggest 6–8 subjects this learner should explore. Mix safe bets (aligned to grade)
+with 1–2 adjacent or interest-driven picks. Skip subjects they've already mastered.
+
+SCHEMA:
+{"subjects":[{"name":"2–4 word subject","emoji":"one emoji","reason":"one sentence why this learner"}]}
+''';
+  }
+
   // ── PLANNER AGENT ───────────────────────────────────────────────────────────
 
   static String planner({
