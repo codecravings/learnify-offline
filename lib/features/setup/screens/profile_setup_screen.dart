@@ -32,7 +32,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Enter your name to continue')));
+          .showSnackBar(const SnackBar(content: Text('Enter a username to continue')));
       return;
     }
 
@@ -73,13 +73,13 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.5),
               ),
               const SizedBox(height: 40),
-              // Name
-              _label('Your name'),
+              // Username
+              _label('Username'),
               const SizedBox(height: 8),
               TextField(
                 controller: _nameCtrl,
                 style: const TextStyle(color: Colors.white),
-                decoration: _inputDecoration('e.g. Arjun, Maria, Ahmad...'),
+                decoration: _inputDecoration('Choose a username'),
                 textCapitalization: TextCapitalization.words,
               ),
               const SizedBox(height: 28),
