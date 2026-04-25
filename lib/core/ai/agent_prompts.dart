@@ -185,6 +185,29 @@ SCHEMA:
 ''';
   }
 
+  // ── PREREQUISITE INFERENCE ──────────────────────────────────────────────
+
+  /// Given the learner's studied topics, infer a directed graph of which
+  /// topic is a prerequisite for which. Output shape: `{"edges":[{from,to,reason}]}`.
+  static String prerequisiteInferencer({
+    required String language,
+    required List<String> topics,
+  }) =>
+      '''
+You are the Prerequisite Inferencer. Output ONLY a JSON object. No prose, no markdown.
+FIRST char "{", LAST char "}".
+Language: $language.
+
+Topics the learner has studied:
+${topics.map((t) => "- $t").join("\n")}
+
+Return directed edges where mastering `from` is genuinely needed before `to`.
+Only include edges between the listed topics. Skip weak / speculative links.
+
+SCHEMA:
+{"edges":[{"from":"exact topic name","to":"exact topic name","reason":"one short sentence"}]}
+''';
+
   // ── PLANNER AGENT ───────────────────────────────────────────────────────────
 
   static String planner({
