@@ -183,10 +183,16 @@ class _StoryScreenState extends State<StoryScreen> {
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
-    setState(() => _phase =
-        widget.customTopic != null ? _Phase.levelSelect : _Phase.styleSelect);
+    // Always bounce back to where the user pressed GENERATE — the styleSelect
+    // screen. Bouncing custom-topic errors to levelSelect creates an
+    // apparent "loop" because the user has to walk forward again before
+    // hitting the same failure.
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg, maxLines: 4, overflow: TextOverflow.ellipsis),
+      backgroundColor: Colors.red,
+      duration: const Duration(seconds: 6),
+    ));
+    setState(() => _phase = _Phase.styleSelect);
   }
 
   void _advanceScene() {
