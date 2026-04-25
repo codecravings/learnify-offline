@@ -24,6 +24,12 @@ class GemmaService {
   bool _modelReady = false;
   bool get isReady => _modelReady;
 
+  /// Single token ceiling for ALL text generation calls. Varying maxTokens
+  /// across calls forces flutter_gemma to rebuild the InferenceModel, which
+  /// is fragile on-device and surfaces as "unable to load model" after a few
+  /// requests. Keep this fixed and bigger than any single response we expect.
+  static const int _textMaxTokens = 8192;
+
   /// Call once at app startup before any other API.
   Future<void> bootstrap() async {
     await FlutterGemma.initialize(
@@ -204,10 +210,14 @@ class GemmaService {
   }
 
   /// One-shot text generation. Creates a fresh chat each time.
+  ///
+  /// [maxTokens] is accepted for API compatibility but ignored — the engine
+  /// uses [_textMaxTokens] for every text call so the InferenceModel stays
+  /// stable across calls. Override only matters for multimodal/image flows.
   Future<String> generate({
     required String systemPrompt,
     required String userPrompt,
-    int maxTokens = 2048,
+    int maxTokens = _textMaxTokens,
   }) async {
     _assertReady();
     final model = await FlutterGemma.getActiveModel(maxTokens: maxTokens);
@@ -224,7 +234,7 @@ class GemmaService {
   Stream<String> generateStream({
     required String systemPrompt,
     required String userPrompt,
-    int maxTokens = 2048,
+    int maxTokens = _textMaxTokens,
   }) async* {
     _assertReady();
     final model = await FlutterGemma.getActiveModel(maxTokens: maxTokens);
