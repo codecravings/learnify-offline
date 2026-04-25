@@ -220,7 +220,7 @@ class GemmaService {
     int maxTokens = _textMaxTokens,
   }) async {
     _assertReady();
-    final model = await FlutterGemma.getActiveModel(maxTokens: maxTokens);
+    final model = await _activeTextModel();
     final chat = await model.createChat(
       systemInstruction: systemPrompt.isNotEmpty ? systemPrompt : null,
     );
@@ -240,7 +240,7 @@ class GemmaService {
     int maxTokens = _textMaxTokens,
   }) async* {
     _assertReady();
-    final model = await FlutterGemma.getActiveModel(maxTokens: maxTokens);
+    final model = await _activeTextModel();
     final chat = await model.createChat(
       systemInstruction: systemPrompt.isNotEmpty ? systemPrompt : null,
     );
@@ -248,6 +248,20 @@ class GemmaService {
     await chat.addQueryChunk(Message.text(text: userPrompt, isUser: true));
     await for (final chunk in chat.generateChatResponseAsync()) {
       if (chunk is TextResponse) yield chunk.token;
+    }
+  }
+
+  /// Acquire the text-only inference model with one retry. flutter_gemma
+  /// occasionally returns a stale handle right after install; the second
+  /// call always succeeds in practice. Surfaces the underlying error if
+  /// both attempts fail so the UI can show something meaningful.
+  Future<dynamic> _activeTextModel() async {
+    try {
+      return await FlutterGemma.getActiveModel(maxTokens: _textMaxTokens);
+    } catch (e) {
+      debugPrint('[Gemma] getActiveModel failed once ($e) — retrying...');
+      await Future.delayed(const Duration(milliseconds: 250));
+      return FlutterGemma.getActiveModel(maxTokens: _textMaxTokens);
     }
   }
 
