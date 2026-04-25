@@ -306,6 +306,40 @@ Make the lesson engaging and cover all concepts thoroughly.
     return const [];
   }
 
+  // ── PREREQUISITE INFERENCE ────────────────────────────────────────────────
+
+  /// Given a list of topic names, asks Gemma which topics are prerequisites
+  /// for which. Returns `[{from, to, reason}]`.
+  Future<List<Map<String, dynamic>>> inferPrerequisites(
+    List<String> topics,
+  ) async {
+    if (topics.length < 2) return const [];
+    final raw = await _gemma.generate(
+      systemPrompt: AgentPrompts.prerequisiteInferencer(
+        language: _lang,
+        topics: topics,
+      ),
+      userPrompt: 'Output the JSON object of edges now.',
+      maxTokens: 2048,
+    );
+
+    try {
+      final decoded = _parseJsonAny(raw);
+      if (decoded is Map<String, dynamic>) {
+        final list = decoded['edges'];
+        if (list is List) {
+          return list
+              .whereType<Map>()
+              .map((m) => Map<String, dynamic>.from(m))
+              .toList();
+        }
+      }
+    } catch (e) {
+      debugPrint('[PrereqInferencer] parse failed: $e');
+    }
+    return const [];
+  }
+
   // ── PLANNER AGENT ───────────────────────────────────────────────────────────
 
   Future<Map<String, dynamic>> generateStudyPlan() async {
