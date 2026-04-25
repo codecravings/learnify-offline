@@ -163,6 +163,14 @@ Make the lesson engaging and cover all concepts thoroughly.
           maxTokens: 3072,
         );
 
+    // Reject Gemma slop: bare strings, empty titles, and obvious placeholder
+    // labels like "sub-topic 1", "item 2", "topic 3". When this fires we
+    // surface a real error instead of pretending we got useful data.
+    final placeholderRe = RegExp(
+      r'^(sub[\s\-]?topic|topic|item|subtopic|untitled)\s*\d*$',
+      caseSensitive: false,
+    );
+
     String pickStr(Map<String, dynamic> m, List<String> keys) {
       for (final k in keys) {
         final v = m[k];
@@ -184,6 +192,7 @@ Make the lesson engaging and cover all concepts thoroughly.
       // suggester shape ({name, reason}) here. Accept those as fallbacks.
       final title = pickStr(m, ['title', 'name', 'topic', 'concept']);
       if (title.isEmpty) return null;
+      if (placeholderRe.hasMatch(title)) return null;
 
       final desc = pickStr(m, ['description', 'reason', 'summary', 'detail']);
       final emoji = pickStr(m, ['emoji', 'icon']);
