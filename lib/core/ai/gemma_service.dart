@@ -311,6 +311,21 @@ class GemmaService {
       throw StateError('Gemma model not initialized yet.');
     }
   }
+
+  /// Force a fresh `getActiveModel()` call to recover from a stuck engine.
+  /// Useful when a UI flow has just hit an "unable to load model" error and
+  /// wants to retry without restarting the whole app.
+  Future<bool> reactivateModel() async {
+    try {
+      await FlutterGemma.getActiveModel(maxTokens: _textMaxTokens);
+      _modelReady = FlutterGemma.hasActiveModel();
+      debugPrint('[Gemma] reactivateModel: $_modelReady');
+      return _modelReady;
+    } catch (e) {
+      debugPrint('[Gemma] reactivateModel failed: $e');
+      return false;
+    }
+  }
 }
 
 /// A persistent multi-turn chat session for one agent (e.g., Study Companion).
