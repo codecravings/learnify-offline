@@ -41,14 +41,39 @@ class GemmaOrchestrator {
       language: _lang,
     );
 
-    final userPrompt = _storyUserPrompt(topic, level);
-    final raw = await _gemma.generate(
-      systemPrompt: systemPrompt,
-      userPrompt: userPrompt,
-      maxTokens: 4096,
-    );
+    Future<String> run(String userPrompt) => _gemma.generate(
+          systemPrompt: systemPrompt,
+          userPrompt: userPrompt,
+          maxTokens: 4096,
+        );
 
-    return StoryResponse.fromJson(_parseJson(raw));
+    String raw = await run(_storyUserPrompt(topic, level));
+    debugPrint('[Story] raw 1: ${raw.substring(0, raw.length.clamp(0, 300))}');
+    Map<String, dynamic>? parsed;
+    try {
+      parsed = _parseJson(raw);
+    } catch (_) {
+      // Fall through to retry.
+    }
+
+    if (parsed == null) {
+      raw = await run(
+        'Your previous response was unusable JSON. Generate the story again. '
+        'Topic: "$topic". Level: $level. Output ONLY the JSON object — no '
+        'prose, no markdown fences. Start with { and end with }. Keep scenes '
+        'short so the JSON fits.',
+      );
+      debugPrint('[Story] raw 2: ${raw.substring(0, raw.length.clamp(0, 300))}');
+      try {
+        parsed = _parseJson(raw);
+      } catch (e) {
+        throw FormatException(
+            'Story JSON parse failed twice. Last response: '
+            '${raw.substring(0, raw.length.clamp(0, 200))}');
+      }
+    }
+
+    return StoryResponse.fromJson(parsed);
   }
 
   // ── STORY FROM IMAGE (multimodal) ─────────────────────────────────────────
