@@ -267,6 +267,45 @@ Make the lesson engaging and cover all concepts thoroughly.
     }
   }
 
+  // ── SUBJECT SUGGESTER ─────────────────────────────────────────────────────
+
+  /// Proposes 6–8 subject cards for the home/courses screens based on the
+  /// learner's profile + history. Returns list of `{name, emoji, reason}` maps.
+  Future<List<Map<String, dynamic>>> suggestSubjects() async {
+    final profile = _profile.currentProfile;
+    final grade = profile?.grade ?? 'Student';
+    final interests = profile?.interests ?? const <String>[];
+    final history = await _memory.getAllTopicProgress();
+
+    final raw = await _gemma.generate(
+      systemPrompt: AgentPrompts.subjectSuggester(
+        language: _lang,
+        grade: grade,
+        interests: interests,
+        history: history,
+      ),
+      userPrompt:
+          'Suggest 6–8 subjects for this learner. Output the JSON object now.',
+      maxTokens: 2048,
+    );
+
+    try {
+      final decoded = _parseJsonAny(raw);
+      if (decoded is Map<String, dynamic>) {
+        final list = decoded['subjects'];
+        if (list is List) {
+          return list
+              .whereType<Map>()
+              .map((m) => Map<String, dynamic>.from(m))
+              .toList();
+        }
+      }
+    } catch (e) {
+      debugPrint('[SubjectSuggester] parse failed: $e');
+    }
+    return const [];
+  }
+
   // ── PLANNER AGENT ───────────────────────────────────────────────────────────
 
   Future<Map<String, dynamic>> generateStudyPlan() async {
