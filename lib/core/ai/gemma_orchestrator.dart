@@ -163,23 +163,46 @@ Make the lesson engaging and cover all concepts thoroughly.
           maxTokens: 3072,
         );
 
-    Map<String, dynamic> coerceItem(dynamic item) {
-      // Gemma sometimes returns bare strings instead of objects — wrap them.
-      if (item is String) {
-        return {
-          'title': item,
-          'description': '',
-          'emoji': '📌',
-          'difficulty': 'beginner',
-        };
+    String pickStr(Map<String, dynamic> m, List<String> keys) {
+      for (final k in keys) {
+        final v = m[k];
+        if (v is String && v.trim().isNotEmpty) return v.trim();
       }
-      if (item is Map) return Map<String, dynamic>.from(item);
-      return {'title': item.toString(), 'description': '', 'emoji': '📌', 'difficulty': 'beginner'};
+      return '';
+    }
+
+    Map<String, dynamic>? coerceItem(dynamic item) {
+      Map<String, dynamic>? m;
+      if (item is Map) {
+        m = Map<String, dynamic>.from(item);
+      } else if (item is String) {
+        m = {'title': item};
+      }
+      if (m == null) return null;
+
+      // Gemma's schema discipline drifts: it sometimes emits the subject-
+      // suggester shape ({name, reason}) here. Accept those as fallbacks.
+      final title = pickStr(m, ['title', 'name', 'topic', 'concept']);
+      if (title.isEmpty) return null;
+
+      final desc = pickStr(m, ['description', 'reason', 'summary', 'detail']);
+      final emoji = pickStr(m, ['emoji', 'icon']);
+      final diff =
+          pickStr(m, ['difficulty', 'level']).toLowerCase();
+
+      return {
+        'title': title,
+        'description': desc,
+        'emoji': emoji.isNotEmpty ? emoji : '📌',
+        'difficulty': diff.isNotEmpty ? diff : 'beginner',
+      };
     }
 
     List<Map<String, dynamic>> extract(dynamic decoded) {
-      if (decoded is List) return decoded.map(coerceItem).toList();
-      if (decoded is Map<String, dynamic>) {
+      List<dynamic>? raw;
+      if (decoded is List) {
+        raw = decoded;
+      } else if (decoded is Map<String, dynamic>) {
         for (final key in const [
           'subtopics',
           'sub_topics',
@@ -190,11 +213,16 @@ Make the lesson engaging and cover all concepts thoroughly.
         ]) {
           final v = decoded[key];
           if (v is List && v.isNotEmpty) {
-            return v.map(coerceItem).toList();
+            raw = v;
+            break;
           }
         }
       }
-      return const [];
+      if (raw == null) return const [];
+      return raw
+          .map(coerceItem)
+          .whereType<Map<String, dynamic>>()
+          .toList();
     }
 
     String raw = await run(
