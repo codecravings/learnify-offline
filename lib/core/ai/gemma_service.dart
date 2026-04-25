@@ -227,7 +227,10 @@ class GemmaService {
 
     await chat.addQueryChunk(Message.text(text: userPrompt, isUser: true));
     final response = await chat.generateChatResponse();
-    return _extractText(response);
+    final out = _extractText(response);
+    debugPrint('[Gemma] generate → ${out.length} chars: '
+        '${out.substring(0, out.length.clamp(0, 240))}');
+    return out;
   }
 
   /// Streaming generation — yields tokens as they arrive (typewriter effect).
