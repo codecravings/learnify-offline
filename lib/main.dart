@@ -12,9 +12,20 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialize flutter_gemma runtime, then warm an already-installed
-  // model if one exists (so cold relaunches skip /setup).
+  // model if one exists (so cold relaunches skip /setup). If a sideloaded
+  // file is present but not installed yet, silently install it now so the
+  // user is never sent to /setup just because they pushed the file via adb.
   await GemmaService.instance.bootstrap();
   await GemmaService.instance.resumeIfInstalled();
+  if (!GemmaService.instance.isReady &&
+      await GemmaService.instance.hasSideloadedFile()) {
+    try {
+      await GemmaService.instance.initializeFromFile();
+    } catch (_) {
+      // Fall through — router will send the user to /setup where they can
+      // retry manually and see the real error.
+    }
+  }
 
   // Load saved profile (replaces Firebase Auth state)
   await LocalProfileService.instance.initialize();
