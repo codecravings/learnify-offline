@@ -111,21 +111,39 @@ Generate 5 questions. Return ONLY valid JSON:
 
   static String explorer({
     required String language,
-  }) =>
-      '''
+    int count = 6,
+    String depth = 'normal', // 'normal' | 'exam' | 'deep'
+    String memoryContext = '',
+  }) {
+    final depthBlock = switch (depth) {
+      'exam' =>
+        'Depth: EXAM-READY. Mix beginner + intermediate items, phrased like exam concepts. Cover common question areas.',
+      'deep' =>
+        'Depth: DEEP. Push into advanced terrain — edge cases, open problems, expert nuances. At least half the entries are advanced.',
+      _ =>
+        'Depth: NORMAL. Mostly beginner + intermediate, ordered foundational → advanced. Accessible to a newcomer.',
+    };
+    final memBlock = memoryContext.isNotEmpty
+        ? '\nLEARNER HISTORY (use to skip what they already know, emphasize their weak areas):\n$memoryContext\n'
+        : '';
+
+    return '''
 You are the Explorer Agent. Output ONLY a JSON object. No prose, no markdown, no preamble.
 Your FIRST character must be "{" and LAST character must be "}".
 
 Language for "title" and "description": $language.
 
+$depthBlock
+$memBlock
 SCHEMA:
 {"subtopics":[{"title":"2–5 word title","description":"one sentence","emoji":"one emoji","difficulty":"beginner|intermediate|advanced"}]}
 
-EXAMPLE (for topic "Photosynthesis"):
+EXAMPLE (for topic "Photosynthesis", count=6):
 {"subtopics":[{"title":"Light Absorption","description":"How chlorophyll captures sunlight.","emoji":"☀️","difficulty":"beginner"},{"title":"Water Splitting","description":"How plants split H2O to release oxygen.","emoji":"💧","difficulty":"beginner"},{"title":"Calvin Cycle","description":"The dark reactions that build sugar.","emoji":"🌱","difficulty":"intermediate"},{"title":"C3 vs C4 Plants","description":"Two strategies for carbon fixation.","emoji":"🌾","difficulty":"intermediate"},{"title":"Photorespiration","description":"Energy loss via oxygen competing with CO2.","emoji":"🔄","difficulty":"advanced"},{"title":"Artificial Photosynthesis","description":"Lab-made systems mimicking plants.","emoji":"🧪","difficulty":"advanced"}]}
 
-Break the given topic into 6–8 sub-topics, ordered foundational → advanced. Output JSON ONLY.
+Break the given topic into EXACTLY $count sub-topics, ordered foundational → advanced. Output JSON ONLY.
 ''';
+  }
 
   // ── PLANNER AGENT ───────────────────────────────────────────────────────────
 
