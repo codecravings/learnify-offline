@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../../core/ai/gemma_orchestrator.dart';
+import '../../../core/services/dynamic_catalog_service.dart';
 import '../../../core/services/local_memory_service.dart';
 import '../../../core/services/local_profile_service.dart';
 import '../../../core/theme/app_theme.dart';
@@ -13,7 +14,6 @@ import '../../../core/theme/theme_provider.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../../core/widgets/neon_button.dart';
 import '../../../core/widgets/particle_background.dart';
-import '../../courses/data/course_data.dart';
 import '../../story_learning/models/story_style.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -174,6 +174,8 @@ class _HomeDashboardState extends State<HomeDashboard>
   final _orchestrator = GemmaOrchestrator.instance;
 
   List<Map<String, dynamic>> _studiedTopics = [];
+  List<Map<String, dynamic>> _suggestedSubjects = [];
+  bool _subjectsLoading = true;
   String? _studyPulse;
   bool _pulseLoading = true;
 
@@ -184,6 +186,7 @@ class _HomeDashboardState extends State<HomeDashboard>
     _profile.addListener(_onProfileChanged);
     _loadTopics();
     _loadStudyPulse();
+    _loadSubjects();
   }
 
   @override
@@ -214,6 +217,28 @@ class _HomeDashboardState extends State<HomeDashboard>
     if (mounted) setState(() => _studiedTopics = topics);
   }
 
+  Future<void> _loadSubjects({bool force = false}) async {
+    if (!mounted) return;
+    setState(() => _subjectsLoading = true);
+    try {
+      final subjects = await DynamicCatalogService.instance
+          .suggestedSubjects(force: force);
+      if (mounted) {
+        setState(() {
+          _suggestedSubjects = subjects;
+          _subjectsLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _suggestedSubjects = const [];
+          _subjectsLoading = false;
+        });
+      }
+    }
+  }
+
   Future<void> _loadStudyPulse() async {
     if (!mounted) return;
     setState(() => _pulseLoading = true);
@@ -239,6 +264,7 @@ class _HomeDashboardState extends State<HomeDashboard>
   Future<void> _refresh() async {
     await _loadTopics();
     await _loadStudyPulse();
+    await _loadSubjects(force: true);
   }
 
   String get _displayName => _profile.currentProfile?.name ?? 'Learner';
@@ -750,50 +776,100 @@ class _HomeDashboardState extends State<HomeDashboard>
     );
   }
 
-  // ── Subjects ────────────────────────────────────────────────────────────────
+  // ── Subjects (dynamic Gemma suggestions) ────────────────────────────────
+
+  static const _subjectColors = [
+    AppTheme.accentCyan,
+    AppTheme.accentPurple,
+    AppTheme.accentGreen,
+    AppTheme.accentGold,
+    AppTheme.accentMagenta,
+    AppTheme.accentOrange,
+  ];
 
   Widget _buildSubjectsSection() {
-    final courses = CourseData.allCourses;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionHeader('Explore Subjects', Icons.menu_book_rounded,
-            AppTheme.accentCyan, 'Curated chapters + AI-generated lessons',
-            trailingTap: () => context.push('/courses')),
+        _sectionHeader(
+          'Explore Subjects',
+          Icons.menu_book_rounded,
+          AppTheme.accentCyan,
+          _subjectsLoading
+              ? 'Gemma is picking subjects for you…'
+              : _suggestedSubjects.isEmpty
+                  ? 'Pull to refresh to generate suggestions'
+                  : 'Chosen by Gemma based on your profile',
+          trailingTap: () => context.push('/courses'),
+        ),
         const SizedBox(height: 12),
         SizedBox(
           height: 140,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: courses.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
-            itemBuilder: (_, i) => _buildSubjectCard(courses[i]),
-          ),
+          child: _subjectsLoading
+              ? _buildSubjectsSkeleton()
+              : _suggestedSubjects.isEmpty
+                  ? _buildSubjectsEmpty()
+                  : ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _suggestedSubjects.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 12),
+                      itemBuilder: (_, i) => _buildSubjectCard(
+                        _suggestedSubjects[i],
+                        _subjectColors[i % _subjectColors.length],
+                      ),
+                    ),
         ),
       ],
     );
   }
 
-  Widget _buildSubjectCard(CourseSubject course) {
-    final lessonCount = course.chapters
-        .fold<int>(0, (total, ch) => total + ch.lessons.length);
-    final color = course.accentColor;
+  Widget _buildSubjectsSkeleton() {
+    return ListView.separated(
+      scrollDirection: Axis.horizontal,
+      itemCount: 4,
+      separatorBuilder: (_, __) => const SizedBox(width: 12),
+      itemBuilder: (_, i) => Container(
+        width: 150,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          color: AppTheme.surfaceLight.withAlpha(40),
+          border: Border.all(color: Colors.white.withAlpha(14)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSubjectsEmpty() {
+    return GlassContainer(
+      padding: const EdgeInsets.all(18),
+      borderColor: AppTheme.accentCyan.withAlpha(40),
+      child: Row(
+        children: [
+          Icon(Icons.psychology_rounded,
+              color: AppTheme.accentCyan.withAlpha(140), size: 28),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Tap the refresh icon — Gemma will suggest subjects for you.',
+              style: GoogleFonts.spaceGrotesk(
+                fontSize: 12,
+                color: AppTheme.textSecondary,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSubjectCard(Map<String, dynamic> subject, Color color) {
+    final name = (subject['name'] as String?)?.trim() ?? 'Subject';
+    final emoji = (subject['emoji'] as String?)?.trim();
+    final reason = (subject['reason'] as String?)?.trim() ?? '';
 
     return GestureDetector(
-      onTap: () {
-        if (course.chapters.isNotEmpty &&
-            course.chapters.first.lessons.isNotEmpty) {
-          final chapter = course.chapters.first;
-          final lesson = chapter.lessons.first;
-          context.push('/lesson', extra: {
-            'subjectId': course.id,
-            'chapterId': chapter.id,
-            'lessonId': lesson.id,
-          });
-        } else {
-          context.push('/lesson', extra: {'customTopic': course.name});
-        }
-      },
+      onTap: () => context.push('/topic-explorer', extra: {'topic': name}),
       child: Container(
         width: 150,
         padding: const EdgeInsets.all(14),
@@ -813,41 +889,41 @@ class _HomeDashboardState extends State<HomeDashboard>
                 Container(
                   width: 32,
                   height: 32,
+                  alignment: Alignment.center,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: color.withAlpha(30),
                   ),
-                  child: Icon(
-                    course.id == 'physics'
-                        ? Icons.blur_circular
-                        : course.id == 'math'
-                            ? Icons.functions
-                            : Icons.school,
-                    color: color,
-                    size: 18,
-                  ),
+                  child: emoji != null && emoji.isNotEmpty
+                      ? Text(emoji, style: const TextStyle(fontSize: 16))
+                      : Icon(Icons.school, color: color, size: 18),
                 ),
                 const Spacer(),
-                if (course.chapters.isEmpty) _pill('AI', AppTheme.accentCyan),
+                _pill('AI', AppTheme.accentCyan),
               ],
             ),
             const SizedBox(height: 10),
             Text(
-              course.name,
+              name,
               style: GoogleFonts.orbitron(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: color,
               ),
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 4),
-            Text(
-              '${course.chapters.length} chapters  ·  $lessonCount lessons',
-              style: GoogleFonts.spaceGrotesk(
-                fontSize: 9,
-                color: AppTheme.textTertiary,
+            Expanded(
+              child: Text(
+                reason,
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 9,
+                  color: AppTheme.textTertiary,
+                  height: 1.3,
+                ),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
