@@ -142,9 +142,23 @@ Make the lesson engaging and cover all concepts thoroughly.
 
   // ── EXPLORER AGENT (topic breakdown) ─────────────────────────────────────
 
-  Future<List<Map<String, dynamic>>> exploreTopic(String topic) async {
+  /// Breaks [topic] into [count] sub-topics using the Explorer agent.
+  /// [depth] controls difficulty spread: 'normal' | 'exam' | 'deep'.
+  /// Injects the learner's past context for this topic so repeat visits can personalise.
+  Future<List<Map<String, dynamic>>> exploreTopic(
+    String topic, {
+    int count = 6,
+    String depth = 'normal',
+  }) async {
+    final memCtx = await _memory.getStudyContext(topic);
+
     Future<String> run(String userMsg) => _gemma.generate(
-          systemPrompt: AgentPrompts.explorer(language: _lang),
+          systemPrompt: AgentPrompts.explorer(
+            language: _lang,
+            count: count,
+            depth: depth,
+            memoryContext: memCtx,
+          ),
           userPrompt: userMsg,
           maxTokens: 3072,
         );
@@ -184,7 +198,8 @@ Make the lesson engaging and cover all concepts thoroughly.
     }
 
     String raw = await run(
-      'Topic: "$topic". Output the JSON object now. Begin your response with { and nothing else. Include 6 to 8 entries in "subtopics".',
+      'Topic: "$topic". Output the JSON object now. Begin your response with { and nothing else. '
+      'Include EXACTLY $count entries in "subtopics".',
     );
     debugPrint('[Explorer] raw 1: ${raw.substring(0, raw.length.clamp(0, 300))}');
     var result = extract(_tryParse(raw));
@@ -194,7 +209,7 @@ Make the lesson engaging and cover all concepts thoroughly.
       raw = await run(
         'Your previous response was unusable. Topic: "$topic". '
         'Output ONLY a JSON object with key "subtopics" containing a non-empty '
-        'array of 6 to 8 objects. Start with { and end with }.',
+        'array of EXACTLY $count objects. Start with { and end with }.',
       );
       debugPrint('[Explorer] raw 2: ${raw.substring(0, raw.length.clamp(0, 300))}');
       result = extract(_tryParse(raw));
