@@ -4,8 +4,51 @@ import 'package:flutter/foundation.dart';
 
 import '../../core/ai/gemma_service.dart';
 import '../../features/story_learning/models/story_response.dart';
+import '../../features/story_learning/models/story_scene.dart';
 import '../data/franchise_loader.dart';
 import 'lab_memory_service.dart';
+
+/// One progressive piece of a lab story as it streams in.
+enum LabStoryChunkKind { intro, moreScenes, quiz }
+
+class LabStoryChunk {
+  const LabStoryChunk._({
+    required this.kind,
+    this.title,
+    this.characters = const [],
+    this.scenes = const [],
+    this.quiz = const [],
+  });
+
+  factory LabStoryChunk.intro({
+    required String title,
+    required List<FranchiseCharacter> characters,
+    required List<StoryScene> firstScenes,
+  }) =>
+      LabStoryChunk._(
+        kind: LabStoryChunkKind.intro,
+        title: title,
+        characters: characters,
+        scenes: firstScenes,
+      );
+
+  factory LabStoryChunk.moreScenes(List<StoryScene> scenes) => LabStoryChunk._(
+        kind: LabStoryChunkKind.moreScenes,
+        scenes: scenes,
+      );
+
+  factory LabStoryChunk.quiz(List<StoryQuizQuestion> questions) =>
+      LabStoryChunk._(
+        kind: LabStoryChunkKind.quiz,
+        quiz: questions,
+      );
+
+  final LabStoryChunkKind kind;
+  final String? title;
+  final List<FranchiseCharacter> characters;
+  final List<StoryScene> scenes;
+  final List<StoryQuizQuestion> quiz;
+}
 
 /// Lab orchestrator for franchise-style story generation + companion chat.
 ///
@@ -92,12 +135,14 @@ EXAMPLE for topic "Fractions" at beginner level, count=5:
 
   // ── STORY ──────────────────────────────────────────────────────────────────
 
-  /// Generates a franchise-styled story lesson in a single Gemma call.
-  Future<StoryResponse> generateFranchiseStory({
+  /// Progressive story generation. Yields a [LabStoryChunk] each time a
+  /// piece of the story is ready (intro → more scenes → quiz). The UI can
+  /// render scene 1 while Gemma is still working on later scenes + quiz.
+  Stream<LabStoryChunk> streamFranchiseStory({
     required String topic,
-    required String difficulty, // 'beginner' | 'intermediate' | 'advanced'
+    required String difficulty,
     required Franchise? franchise,
-  }) async {
+  }) async* {
     final memCtx = await _memory.getStudyContext(topic);
     await _memory.retainTopicInterest(topic, level: difficulty);
     if (franchise != null) {
@@ -108,34 +153,122 @@ EXAMPLE for topic "Fractions" at beginner level, count=5:
     }
 
     final systemPrompt = _buildSystemPrompt(franchise, memCtx);
-    final userPrompt = _buildUserPrompt(topic, difficulty);
+    final levelHint = _levelHint(difficulty);
 
+    // ── Call A: title + characters + scene 1 ────────────────────────────
+    final introUser = '''
+Begin a franchise visual-novel lesson.
+Topic: $topic
+Difficulty: $difficulty
+Level guidance: $levelHint
+
+Output ONLY this JSON shape:
+{
+  "title": "short lesson title",
+  "characters": [{"id":"slug","name":"<EXACT cast name>","role":"short role","color":"#HEX"}],
+  "scenes": [{"characterId":"slug","emotion":"string","dialogue":"string","narration":"string","conceptTag":"string"}]
+}
+
+Rules: 2-4 characters AND exactly ONE opening scene. Dialogue ≤25 words.
+Use a real-world analogy. No jargon.
+''';
+    final intro = await _runJsonRetry('intro', systemPrompt, introUser);
+    if (intro == null) {
+      throw const FormatException(
+          'Could not generate the opening scene. Try again with a simpler topic.');
+    }
+    final title = (intro['title'] as String?)?.trim() ?? topic;
+    final characters = _parseCharacters(intro['characters']);
+    final scene1 = _parseScenes(intro['scenes']);
+    yield LabStoryChunk.intro(
+      title: title,
+      characters: characters,
+      firstScenes: scene1,
+    );
+
+    // ── Call B: scenes 2 + 3 ────────────────────────────────────────────
+    final castNames = characters.map((c) => '"${c.name}" (id: ${c.id})').join(', ');
+    final moreUser = '''
+Continue the lesson. Topic: $topic. Cast: $castNames.
+
+Output ONLY this JSON:
+{"scenes":[{"characterId":"slug","emotion":"string","dialogue":"string","narration":"string","conceptTag":"string"}]}
+
+Rules: exactly 2 more scenes. Dialogue ≤25 words. Same characterId slugs from the cast above.
+''';
+    final more = await _runJsonRetry('more', systemPrompt, moreUser);
+    final moreScenes =
+        more == null ? const <StoryScene>[] : _parseScenes(more['scenes']);
+    yield LabStoryChunk.moreScenes(moreScenes);
+
+    // ── Call C: quiz ────────────────────────────────────────────────────
+    final quizUser = '''
+Generate the quiz. Topic: $topic.
+
+Output ONLY this JSON:
+{"quiz":[{"question":"string","options":["A","B","C","D"],"correctIndex":0,"explanation":"string"}]}
+
+Rules: exactly 3 questions. Each option ≤12 words. Plain English.
+''';
+    final quiz = await _runJsonRetry('quiz', systemPrompt, quizUser);
+    final quizQuestions =
+        quiz == null ? const <StoryQuizQuestion>[] : _parseQuiz(quiz['quiz']);
+    yield LabStoryChunk.quiz(quizQuestions);
+  }
+
+  Future<Map<String, dynamic>?> _runJsonRetry(
+    String tag,
+    String systemPrompt,
+    String userPrompt,
+  ) async {
     Future<String> run(String user) => _gemma.generate(
           systemPrompt: systemPrompt,
           userPrompt: user,
-          maxTokens: 8192,
+          maxTokens: 4096,
         );
-
     String raw = await run(userPrompt);
-    debugPrint('[Lab.story] raw 1 length=${raw.length}');
-    Map<String, dynamic>? parsed = _tryParseOrRepair(raw);
+    debugPrint('[Lab.$tag] raw 1 length=${raw.length}');
+    var parsed = _tryParseOrRepair(raw);
+    if (parsed != null) return parsed;
+    raw = await run(
+      'Previous response was unusable. Output ONLY a JSON object that matches '
+      'the schema described — no prose, no markdown, no wrapper key. Start '
+      'with { and end with }. Keep strings short.',
+    );
+    debugPrint('[Lab.$tag] raw 2 length=${raw.length}');
+    return _tryParseOrRepair(raw);
+  }
 
-    if (parsed == null) {
-      raw = await run(
-        'Your previous response was unusable JSON. Generate the lesson again.\n'
-        'Topic: "$topic". Difficulty: $difficulty.\n'
-        'Output ONLY the JSON object — start with { and end with }. Keep ALL '
-        'dialogue under 80 characters so the JSON fits in one response.',
-      );
-      debugPrint('[Lab.story] raw 2 length=${raw.length}');
-      parsed = _tryParseOrRepair(raw);
-      if (parsed == null) {
-        throw FormatException(
-            'Lab story JSON parse failed twice. Last response (first 240 chars): '
-            '${raw.substring(0, raw.length.clamp(0, 240))}');
-      }
-    }
-    return StoryResponse.fromJson(parsed);
+  String _levelHint(String difficulty) => switch (difficulty) {
+        'intermediate' =>
+          'Knows the basics. Show one connection + one real-world use.',
+        'advanced' =>
+          'Cover one edge case + one common misconception. Plain language.',
+        _ => 'Complete beginner. Use analogies first.',
+      };
+
+  List<FranchiseCharacter> _parseCharacters(dynamic raw) {
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((m) => FranchiseCharacter.fromJson(Map<String, dynamic>.from(m)))
+        .toList();
+  }
+
+  List<StoryScene> _parseScenes(dynamic raw) {
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((m) => StoryScene.fromJson(Map<String, dynamic>.from(m)))
+        .toList();
+  }
+
+  List<StoryQuizQuestion> _parseQuiz(dynamic raw) {
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((m) => StoryQuizQuestion.fromJson(Map<String, dynamic>.from(m)))
+        .toList();
   }
 
   /// Try strict parse first; on failure, try repairing a truncated/unterminated
@@ -344,24 +477,6 @@ $memBlock
 Pick 2-4 distinct original characters who would be interesting teachers of this topic.
 Make their voices distinct.
 ''';
-
-  String _buildUserPrompt(String topic, String difficulty) {
-    final levelHint = switch (difficulty) {
-      'intermediate' =>
-        'Knows the basics. Show one connection + one real-world use.',
-      'advanced' =>
-        'Cover one edge case + one common misconception. Plain language.',
-      _ => 'Complete beginner. Use analogies first.',
-    };
-    return '''
-Create a franchise-styled visual-novel story lesson:
-Topic: $topic
-Difficulty: $difficulty
-Level guidance: $levelHint
-
-Use plain, friendly English. Dialogue ≤25 words per line. Quiz options ≤12 words.
-''';
-  }
 
   // ── JSON ───────────────────────────────────────────────────────────────────
 
