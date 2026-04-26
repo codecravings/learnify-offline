@@ -39,13 +39,136 @@ class LabOrchestrator {
     final systemPrompt = _buildSystemPrompt(franchise, memCtx);
     final userPrompt = _buildUserPrompt(topic, difficulty);
 
-    final raw = await _gemma.generate(
-      systemPrompt: systemPrompt,
-      userPrompt: userPrompt,
-      maxTokens: 4096,
-    );
-    debugPrint('[Lab.story] raw length=${raw.length}');
-    return StoryResponse.fromJson(_parseJson(raw));
+    Future<String> run(String user) => _gemma.generate(
+          systemPrompt: systemPrompt,
+          userPrompt: user,
+          maxTokens: 8192,
+        );
+
+    String raw = await run(userPrompt);
+    debugPrint('[Lab.story] raw 1 length=${raw.length}');
+    Map<String, dynamic>? parsed = _tryParseOrRepair(raw);
+
+    if (parsed == null) {
+      raw = await run(
+        'Your previous response was unusable JSON. Generate the lesson again.\n'
+        'Topic: "$topic". Difficulty: $difficulty.\n'
+        'Output ONLY the JSON object — start with { and end with }. Keep ALL '
+        'dialogue under 80 characters so the JSON fits in one response.',
+      );
+      debugPrint('[Lab.story] raw 2 length=${raw.length}');
+      parsed = _tryParseOrRepair(raw);
+      if (parsed == null) {
+        throw FormatException(
+            'Lab story JSON parse failed twice. Last response (first 240 chars): '
+            '${raw.substring(0, raw.length.clamp(0, 240))}');
+      }
+    }
+    return StoryResponse.fromJson(parsed);
+  }
+
+  /// Try strict parse first; on failure, try repairing a truncated/unterminated
+  /// response. Returns null if both fail.
+  Map<String, dynamic>? _tryParseOrRepair(String raw) {
+    if (raw.trim().isEmpty) return null;
+    try {
+      return _parseJson(raw);
+    } catch (_) {
+      // Fall through to repair.
+    }
+    try {
+      final repaired = _repairTruncatedJson(raw);
+      if (repaired == null) return null;
+      final decoded = jsonDecode(repaired);
+      if (decoded is Map<String, dynamic>) return decoded;
+    } catch (e) {
+      debugPrint('[Lab] repair failed: $e');
+    }
+    return null;
+  }
+
+  /// Repair a JSON object that was cut off mid-stream (model hit a token cap
+  /// or emitted EOS too early). Walks the string once, tracking string + escape
+  /// state, finds the depth at the end, and closes everything that's still open.
+  /// Trims any trailing partial value (string/number/keyword) before closing.
+  String? _repairTruncatedJson(String raw) {
+    var s = raw.trim();
+    s = s.replaceAll(RegExp(r'```[a-zA-Z]*\n?'), '').replaceAll('```', '').trim();
+    final start = s.indexOf('{');
+    if (start < 0) return null;
+    s = s.substring(start);
+
+    final stack = <String>[];
+    var inStr = false;
+    var esc = false;
+    var lastSafeIdx = -1;
+    for (var i = 0; i < s.length; i++) {
+      final c = s[i];
+      if (inStr) {
+        if (esc) {
+          esc = false;
+        } else if (c == '\\') {
+          esc = true;
+        } else if (c == '"') {
+          inStr = false;
+          lastSafeIdx = i;
+        }
+        continue;
+      }
+      if (c == '"') {
+        inStr = true;
+        continue;
+      }
+      if (c == '{' || c == '[') {
+        stack.add(c);
+      } else if (c == '}') {
+        if (stack.isEmpty || stack.removeLast() != '{') return null;
+        lastSafeIdx = i;
+      } else if (c == ']') {
+        if (stack.isEmpty || stack.removeLast() != '[') return null;
+        lastSafeIdx = i;
+      } else if (c == ',' || c == ':') {
+        lastSafeIdx = i;
+      }
+    }
+
+    if (lastSafeIdx < 0) return null;
+    var trimmed = s.substring(0, lastSafeIdx + 1);
+
+    // Re-walk the trimmed body to recompute the open-stack.
+    stack.clear();
+    inStr = false;
+    esc = false;
+    for (var i = 0; i < trimmed.length; i++) {
+      final c = trimmed[i];
+      if (inStr) {
+        if (esc) {
+          esc = false;
+        } else if (c == '\\') {
+          esc = true;
+        } else if (c == '"') {
+          inStr = false;
+        }
+        continue;
+      }
+      if (c == '"') {
+        inStr = true;
+      } else if (c == '{' || c == '[') {
+        stack.add(c);
+      } else if (c == '}' || c == ']') {
+        if (stack.isNotEmpty) stack.removeLast();
+      }
+    }
+
+    final trailingComma = RegExp(r',\s*$');
+    trimmed = trimmed.replaceAll(trailingComma, '');
+
+    final closer = StringBuffer(trimmed);
+    while (stack.isNotEmpty) {
+      final open = stack.removeLast();
+      closer.write(open == '{' ? '}' : ']');
+    }
+    return closer.toString();
   }
 
   // ── COMPANION ──────────────────────────────────────────────────────────────
