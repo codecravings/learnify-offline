@@ -9,6 +9,8 @@ import '../data/franchise_loader.dart';
 import 'lab_memory_service.dart';
 
 /// One progressive piece of a lab story as it streams in.
+/// `kind` distinguishes intro (title + cast + first scene) from later scenes
+/// from the trailing quiz block.
 enum LabStoryChunkKind { intro, moreScenes, quiz }
 
 class LabStoryChunk {
@@ -137,7 +139,11 @@ EXAMPLE for topic "Fractions" at beginner level, count=5:
 
   /// Progressive story generation. Yields a [LabStoryChunk] each time a
   /// piece of the story is ready (intro → more scenes → quiz). The UI can
-  /// render scene 1 while Gemma is still working on later scenes + quiz.
+  /// render scene 1 while Gemma is still working on scenes 2–3.
+  ///
+  /// Total wall-time is ~the same as one big call, but time-to-first-paint
+  /// drops dramatically — the user sees something within ~30 s instead of
+  /// staring at a spinner for 3-4 minutes.
   Stream<LabStoryChunk> streamFranchiseStory({
     required String topic,
     required String difficulty,
@@ -152,7 +158,8 @@ EXAMPLE for topic "Fractions" at beginner level, count=5:
       );
     }
 
-    // Build the cast in DART, not in Gemma. Gemma physically cannot pick
+    // Build the cast in DART, not in Gemma. This is the bulletproof fix
+    // for the "wrong character names" issue: Gemma physically cannot pick
     // wrong names because we never ask it to produce the cast — we only
     // ask it to write scenes referencing characterIds we hand it.
     final cast = _buildCast(franchise);
@@ -164,7 +171,7 @@ EXAMPLE for topic "Fractions" at beginner level, count=5:
     final levelHint = _levelHint(difficulty);
     final title = _topicTitle(topic, difficulty);
 
-    // ── Call A: scene 1 ─────────────────────────────────────────────────
+    // ── Call A: scenes 1-3 ──────────────────────────────────────────────
     final introUser = _scenesUserPrompt(
       part: 1,
       totalParts: 3,
@@ -173,22 +180,23 @@ EXAMPLE for topic "Fractions" at beginner level, count=5:
       levelHint: levelHint,
       castDescription: castDescription,
       castIdsCsv: castIdsCsv,
-      sceneCount: 1,
+      sceneCount: 3,
       previousScenes: 0,
     );
     final intro = await _runJsonRetry('scenes1', systemPrompt, introUser);
-    final scene1 = intro == null ? const <StoryScene>[] : _parseScenes(intro['scenes']);
-    if (scene1.isEmpty) {
+    final scenes1 = intro == null ? const <StoryScene>[] : _parseScenes(intro['scenes']);
+    if (scenes1.isEmpty) {
       throw const FormatException(
-          'Could not generate the opening scene. Try again, or pick a simpler topic.');
+          'Could not generate the opening scenes. Try again, or pick a simpler topic.');
     }
+
     yield LabStoryChunk.intro(
       title: title,
       characters: cast,
-      firstScenes: _retagSceneIds(scene1, castIds),
+      firstScenes: _retagSceneIds(scenes1, castIds),
     );
 
-    // ── Call B: scenes 2 + 3 ────────────────────────────────────────────
+    // ── Call B: scenes 4-6 ──────────────────────────────────────────────
     final moreUser = _scenesUserPrompt(
       part: 2,
       totalParts: 3,
@@ -197,61 +205,46 @@ EXAMPLE for topic "Fractions" at beginner level, count=5:
       levelHint: levelHint,
       castDescription: castDescription,
       castIdsCsv: castIdsCsv,
-      sceneCount: 2,
-      previousScenes: scene1.length,
+      sceneCount: 3,
+      previousScenes: scenes1.length,
     );
     final more = await _runJsonRetry('scenes2', systemPrompt, moreUser);
-    final moreScenes =
-        more == null ? const <StoryScene>[] : _parseScenes(more['scenes']);
-    yield LabStoryChunk.moreScenes(_retagSceneIds(moreScenes, castIds));
+    final scenes2 = more == null ? const <StoryScene>[] : _parseScenes(more['scenes']);
+    yield LabStoryChunk.moreScenes(_retagSceneIds(scenes2, castIds));
 
-    // ── Call C: quiz ────────────────────────────────────────────────────
-    final quizUser = '''
-Generate the quiz. Topic: $topic.
+    // ── Call C: scenes 7-8 + quiz ───────────────────────────────────────
+    final finalUser = '''
+Final part of the lesson. Topic: "$topic". Cast: $castIdsCsv.
 
-Output ONLY this JSON:
-{"quiz":[{"question":"string","options":["A","B","C","D"],"correctIndex":0,"explanation":"string"}]}
+Already shown: ${scenes1.length + scenes2.length} scenes.
 
-Rules: exactly 3 questions. Each option ≤12 words. Plain English.
+Output ONLY this JSON (BOTH keys, in this exact shape):
+{
+  "scenes": [
+    {"characterId":"<one of $castIdsCsv>","emotion":"string","dialogue":"string","narration":"string","conceptTag":"string"}
+  ],
+  "quiz": [
+    {"question":"string","options":["A","B","C","D"],"correctIndex":0,"explanation":"string"}
+  ]
+}
+
+Rules:
+- "scenes" has exactly 2 entries that wrap up the lesson.
+- "quiz" has exactly 3 questions reviewing what was taught.
+- Dialogue ≤25 words. Quiz options ≤12 words.
+- Use ONLY characterId values from $castIdsCsv. No new character ids.
 ''';
-    final quiz = await _runJsonRetry('quiz', systemPrompt, quizUser);
-    final quizQuestions =
-        quiz == null ? const <StoryQuizQuestion>[] : _parseQuiz(quiz['quiz']);
-    yield LabStoryChunk.quiz(quizQuestions);
+    final tail = await _runJsonRetry('finalScenesQuiz', systemPrompt, finalUser);
+    final scenes3 = tail == null ? const <StoryScene>[] : _parseScenes(tail['scenes']);
+    final quizQs = tail == null ? const <StoryQuizQuestion>[] : _parseQuiz(tail['quiz']);
+    if (scenes3.isNotEmpty) {
+      yield LabStoryChunk.moreScenes(_retagSceneIds(scenes3, castIds));
+    }
+    yield LabStoryChunk.quiz(quizQs);
   }
 
-  Future<Map<String, dynamic>?> _runJsonRetry(
-    String tag,
-    String systemPrompt,
-    String userPrompt,
-  ) async {
-    Future<String> run(String user) => _gemma.generate(
-          systemPrompt: systemPrompt,
-          userPrompt: user,
-          maxTokens: 4096,
-        );
-    String raw = await run(userPrompt);
-    debugPrint('[Lab.$tag] raw 1 length=${raw.length}');
-    var parsed = _tryParseOrRepair(raw);
-    if (parsed != null) return parsed;
-    raw = await run(
-      'Previous response was unusable. Output ONLY a JSON object that matches '
-      'the schema described — no prose, no markdown, no wrapper key. Start '
-      'with { and end with }. Keep strings short.',
-    );
-    debugPrint('[Lab.$tag] raw 2 length=${raw.length}');
-    return _tryParseOrRepair(raw);
-  }
-
-  String _levelHint(String difficulty) => switch (difficulty) {
-        'intermediate' =>
-          'Knows the basics. Show one connection + one real-world use.',
-        'advanced' =>
-          'Cover one edge case + one common misconception. Plain language.',
-        _ => 'Complete beginner. Use analogies first.',
-      };
-
-  /// Build the cast directly from the dataset. Generic ensemble if no franchise.
+  /// Build the [FranchiseCharacter] cast directly from the dataset entry.
+  /// If [franchise] is null, return a small generic ensemble.
   List<FranchiseCharacter> _buildCast(Franchise? franchise) {
     const palette = ['#3B82F6', '#EF4444', '#22C55E', '#F59E0B', '#8B5CF6'];
     if (franchise == null) {
@@ -294,6 +287,8 @@ Rules: exactly 3 questions. Each option ≤12 words. Plain English.
     return cleaned.isEmpty ? fallback : cleaned;
   }
 
+  /// Build a plain-text personality block listing each cast member by id.
+  /// We give Gemma the persona traits but NOT the option to pick names.
   String _castDescriptionForPrompt(
     Franchise? franchise,
     List<FranchiseCharacter> cast,
@@ -316,7 +311,8 @@ Rules: exactly 3 questions. Each option ≤12 words. Plain English.
     return buf.toString();
   }
 
-  /// Coerce any characterId not in the locked cast back to the first cast id.
+  /// Coerce any characterId in [scenes] that doesn't match the locked cast
+  /// to the first available cast id. Prevents Gemma from inventing new ids.
   List<StoryScene> _retagSceneIds(List<StoryScene> scenes, List<String> castIds) {
     if (castIds.isEmpty) return scenes;
     final allowed = castIds.toSet();
@@ -370,12 +366,47 @@ Output ONLY this JSON shape (no other keys, no wrapper):
 }
 
 Rules:
-- Exactly $sceneCount scene${sceneCount == 1 ? '' : 's'}.
+- Exactly $sceneCount scenes.
 - characterId MUST be one of $castIdsCsv. No new ids.
 - Dialogue ≤25 words. Each scene introduces ONE idea via a real-world analogy first.
-- Plain, friendly English. Avoid jargon.
+- Use plain, friendly English. Avoid jargon.
 ''';
   }
+
+  /// Run a Gemma call; if the response can't be parsed, retry once with a
+  /// simpler instruction. Returns null if both attempts fail.
+  Future<Map<String, dynamic>?> _runJsonRetry(
+    String tag,
+    String systemPrompt,
+    String userPrompt,
+  ) async {
+    Future<String> run(String user) => _gemma.generate(
+          systemPrompt: systemPrompt,
+          userPrompt: user,
+          maxTokens: 4096,
+        );
+
+    String raw = await run(userPrompt);
+    debugPrint('[Lab.$tag] raw 1 length=${raw.length}');
+    var parsed = _tryParseOrRepair(raw);
+    if (parsed != null) return parsed;
+
+    raw = await run(
+      'Previous response was unusable. Output ONLY a JSON object that matches '
+      'the schema I described — no prose, no markdown, no wrapper key. Start '
+      'with { and end with }. Keep strings short.',
+    );
+    debugPrint('[Lab.$tag] raw 2 length=${raw.length}');
+    return _tryParseOrRepair(raw);
+  }
+
+  String _levelHint(String difficulty) => switch (difficulty) {
+        'intermediate' =>
+          'Knows the basics. Show one connection + one real-world use.',
+        'advanced' =>
+          'Cover one edge case + one common misconception. Plain language.',
+        _ => 'Complete beginner. Use analogies first.',
+      };
 
   List<StoryScene> _parseScenes(dynamic raw) {
     if (raw is! List) return const [];
@@ -418,21 +449,23 @@ Rules:
     }
     if (decoded == null) return null;
 
-    // Schema keys we actually use across the lab calls.
+    // Schema keys we actually use across the three calls.
     const expected = {
-      'title', 'characters', 'scenes', 'quiz', 'subtopics',
+      'title', 'characters', 'scenes', 'quiz',
     };
     final hasExpected = decoded.keys.any(expected.contains);
     if (hasExpected) return decoded;
 
-    // No expected keys — Gemma probably wrapped it. If there's exactly one
-    // Map child, hoist it.
-    final mapChildren = decoded.entries.where((e) => e.value is Map).toList();
+    // No expected keys at top level — Gemma probably wrapped it. If there's
+    // exactly one Map child, hoist it.
+    final mapChildren =
+        decoded.entries.where((e) => e.value is Map).toList();
     if (mapChildren.length == 1) {
       final unwrapped = Map<String, dynamic>.from(mapChildren.first.value as Map);
       debugPrint('[Lab] unwrapped outer key "${mapChildren.first.key}"');
       return unwrapped;
     }
+
     return decoded;
   }
 
@@ -447,10 +480,11 @@ Rules:
     if (start < 0) return null;
     s = s.substring(start);
 
-    final stack = <String>[];
+    // Walk the string and track the bracket stack, in-string flag, and escape.
+    final stack = <String>[]; // entries: '{' or '['
     var inStr = false;
     var esc = false;
-    var lastSafeIdx = -1;
+    var lastSafeIdx = -1; // last position where structure was syntactically clean
     for (var i = 0; i < s.length; i++) {
       final c = s[i];
       if (inStr) {
@@ -460,7 +494,7 @@ Rules:
           esc = true;
         } else if (c == '"') {
           inStr = false;
-          lastSafeIdx = i;
+          lastSafeIdx = i; // closing quote of a string is a clean boundary
         }
         continue;
       }
@@ -472,7 +506,12 @@ Rules:
         stack.add(c);
       } else if (c == '}') {
         if (stack.isEmpty || stack.removeLast() != '{') return null;
-        lastSafeIdx = i;
+        if (stack.isEmpty) {
+          // Already a complete object, parser would've taken it.
+          lastSafeIdx = i;
+        } else {
+          lastSafeIdx = i;
+        }
       } else if (c == ']') {
         if (stack.isEmpty || stack.removeLast() != '[') return null;
         lastSafeIdx = i;
@@ -481,10 +520,13 @@ Rules:
       }
     }
 
+    // Truncate to the last clean position to drop any partial value
+    // (e.g. `"options": ["foo", "bar` would lose the partial third option).
     if (lastSafeIdx < 0) return null;
     var trimmed = s.substring(0, lastSafeIdx + 1);
 
-    // Re-walk the trimmed body to recompute the open-stack.
+    // Rebuild a well-formed body by closing everything still open.
+    // Re-walk to recompute the stack since we trimmed.
     stack.clear();
     inStr = false;
     esc = false;
@@ -504,14 +546,18 @@ Rules:
         inStr = true;
       } else if (c == '{' || c == '[') {
         stack.add(c);
-      } else if (c == '}' || c == ']') {
+      } else if (c == '}') {
+        if (stack.isNotEmpty) stack.removeLast();
+      } else if (c == ']') {
         if (stack.isNotEmpty) stack.removeLast();
       }
     }
 
+    // Drop a dangling trailing comma — JSON disallows it.
     final trailingComma = RegExp(r',\s*$');
     trimmed = trimmed.replaceAll(trailingComma, '');
 
+    // Close still-open scopes from innermost out.
     final closer = StringBuffer(trimmed);
     while (stack.isNotEmpty) {
       final open = stack.removeLast();
@@ -522,7 +568,7 @@ Rules:
 
   // ── COMPANION ──────────────────────────────────────────────────────────────
 
-  /// Streaming companion reply. Caller persists exchanges via
+  /// Streaming companion reply. Caller is responsible for persisting via
   /// `LabMemoryService.retainChatExchange` once the stream completes.
   Stream<String> companionStream(String query) async* {
     final history = await _memory.getFormattedHistory();
@@ -557,6 +603,10 @@ ${history.isEmpty ? '(empty — they have not studied anything yet)' : history}
 $memoryContext
 ''';
 
+    final allowedNames = franchise == null
+        ? '"Mentor", "Apprentice", "Skeptic", "Cheerleader" (or similar generic personas)'
+        : franchise.characters.map((c) => '"${c.name}"').join(', ');
+
     return '''
 You are the Franchise Lab Story Agent — a creative educational storyteller.
 You produce short visual-novel scenes where 2-4 characters teach the topic through dialogue.
@@ -565,39 +615,54 @@ $personaBlock
 $memBlock
 
 ## Story Rules
-- 3 to 5 scenes total. Each scene = one character speaking.
+- Each scene = one character speaking. Build on prior scenes.
 - Every scene must teach something — no fluff.
-- After the scenes, generate exactly 3 quiz questions, 4 options each (correctIndex is 0-based).
+- Use the EXACT character names from the cast above. Never invent new names.
 
-## Output — return ONLY valid JSON, no markdown fences, no preamble:
-{
-  "title": "string — short lesson title",
-  "characters": [{"id":"slug","name":"persona name","role":"short role","color":"#HEX"}],
-  "scenes": [{"characterId":"slug","emotion":"string","dialogue":"string","narration":"string","conceptTag":"string"}],
-  "quiz": [{"question":"string","options":["A","B","C","D"],"correctIndex":0,"explanation":"string"}]
-}
+## CRITICAL — character names
+- Each entry in "characters" MUST set "name" to one of: $allowedNames.
+- Do NOT put a role description (like "clueless loud father") in the name field.
+- The role / personality goes in the "role" field — never in "name".
+- "characterId" is a short slug for cross-reference (e.g. "peter", "stewie").
+
+## Writing rules (MANDATORY for every scene)
+- Plain, friendly English. Write like you'd explain to a 10-year-old.
+- Every dialogue line ≤ 25 words. Short. Snappy.
+- Each scene introduces ONE idea via a real-world analogy (food, sports, school, family, daily life), then names the term.
+- BANNED words: encapsulation, polymorphism, abstraction, paradigm, leverage, ecosystem, vectorization, deployment, modularity, methodology, framework, optimization, instantiation, parameterize.
+- Quiz options ≤ 12 words each.
+
+## Output
+ALWAYS return ONLY valid JSON, no markdown fences, no outer wrapper key like
+"story_lesson" — start with { and end with }. Output ONLY the keys the user
+prompt asks for in this turn.
 ''';
   }
 
   String _franchisePersonaBlock(Franchise f) {
+    // Keep this block lean — every token here costs us output budget.
+    // Use the real franchise character names (set in the dataset) so the
+    // story has the WOW factor of an actual cameo.
     final buf = StringBuffer()
       ..writeln('## Franchise Mode — ${f.name}')
-      ..writeln('Cast — use these EXACT character names in dialogue:');
+      ..writeln('Cast (use the NAME column verbatim in your output):');
+
     for (final c in f.characters) {
       final sample = c.sampleDialogues.isNotEmpty ? c.sampleDialogues.first : '';
-      buf.writeln(
-        '- ${c.name} — ${c.role}; traits ${c.traits.take(3).join('/')}; '
-        'voice ${c.speechStyle}'
-        '${sample.isNotEmpty ? '; vibe-line "$sample"' : ''}',
-      );
+      buf
+        ..writeln('- NAME: "${c.name}"')
+        ..writeln('  role: ${c.role}')
+        ..writeln('  traits: ${c.traits.take(3).join(', ')}')
+        ..writeln('  voice: ${c.speechStyle}')
+        ..writeln(sample.isNotEmpty ? '  vibe-line: "$sample"' : '');
     }
     return buf.toString();
   }
 
   String _genericStoryBlock() => '''
 ## Story Mode
-Pick 2-4 distinct original characters who would be interesting teachers of this topic.
-Make their voices distinct.
+Pick 2-4 distinct original characters who would be interesting teachers of this topic
+(e.g. wise mentor + curious apprentice + skeptic friend). Make their voices distinct.
 ''';
 
   // ── JSON ───────────────────────────────────────────────────────────────────
