@@ -152,54 +152,58 @@ EXAMPLE for topic "Fractions" at beginner level, count=5:
       );
     }
 
+    // Build the cast in DART, not in Gemma. Gemma physically cannot pick
+    // wrong names because we never ask it to produce the cast — we only
+    // ask it to write scenes referencing characterIds we hand it.
+    final cast = _buildCast(franchise);
+    final castIds = cast.map((c) => c.id).toList();
+    final castIdsCsv = castIds.map((id) => '"$id"').join(', ');
+    final castDescription = _castDescriptionForPrompt(franchise, cast);
+
     final systemPrompt = _buildSystemPrompt(franchise, memCtx);
     final levelHint = _levelHint(difficulty);
+    final title = _topicTitle(topic, difficulty);
 
-    // ── Call A: title + characters + scene 1 ────────────────────────────
-    final introUser = '''
-Begin a franchise visual-novel lesson.
-Topic: $topic
-Difficulty: $difficulty
-Level guidance: $levelHint
-
-Output ONLY this JSON shape:
-{
-  "title": "short lesson title",
-  "characters": [{"id":"slug","name":"<EXACT cast name>","role":"short role","color":"#HEX"}],
-  "scenes": [{"characterId":"slug","emotion":"string","dialogue":"string","narration":"string","conceptTag":"string"}]
-}
-
-Rules: 2-4 characters AND exactly ONE opening scene. Dialogue ≤25 words.
-Use a real-world analogy. No jargon.
-''';
-    final intro = await _runJsonRetry('intro', systemPrompt, introUser);
-    if (intro == null) {
+    // ── Call A: scene 1 ─────────────────────────────────────────────────
+    final introUser = _scenesUserPrompt(
+      part: 1,
+      totalParts: 3,
+      topic: topic,
+      difficulty: difficulty,
+      levelHint: levelHint,
+      castDescription: castDescription,
+      castIdsCsv: castIdsCsv,
+      sceneCount: 1,
+      previousScenes: 0,
+    );
+    final intro = await _runJsonRetry('scenes1', systemPrompt, introUser);
+    final scene1 = intro == null ? const <StoryScene>[] : _parseScenes(intro['scenes']);
+    if (scene1.isEmpty) {
       throw const FormatException(
-          'Could not generate the opening scene. Try again with a simpler topic.');
+          'Could not generate the opening scene. Try again, or pick a simpler topic.');
     }
-    final title = (intro['title'] as String?)?.trim() ?? topic;
-    final characters = _parseCharacters(intro['characters']);
-    final scene1 = _parseScenes(intro['scenes']);
     yield LabStoryChunk.intro(
       title: title,
-      characters: characters,
-      firstScenes: scene1,
+      characters: cast,
+      firstScenes: _retagSceneIds(scene1, castIds),
     );
 
     // ── Call B: scenes 2 + 3 ────────────────────────────────────────────
-    final castNames = characters.map((c) => '"${c.name}" (id: ${c.id})').join(', ');
-    final moreUser = '''
-Continue the lesson. Topic: $topic. Cast: $castNames.
-
-Output ONLY this JSON:
-{"scenes":[{"characterId":"slug","emotion":"string","dialogue":"string","narration":"string","conceptTag":"string"}]}
-
-Rules: exactly 2 more scenes. Dialogue ≤25 words. Same characterId slugs from the cast above.
-''';
-    final more = await _runJsonRetry('more', systemPrompt, moreUser);
+    final moreUser = _scenesUserPrompt(
+      part: 2,
+      totalParts: 3,
+      topic: topic,
+      difficulty: difficulty,
+      levelHint: levelHint,
+      castDescription: castDescription,
+      castIdsCsv: castIdsCsv,
+      sceneCount: 2,
+      previousScenes: scene1.length,
+    );
+    final more = await _runJsonRetry('scenes2', systemPrompt, moreUser);
     final moreScenes =
         more == null ? const <StoryScene>[] : _parseScenes(more['scenes']);
-    yield LabStoryChunk.moreScenes(moreScenes);
+    yield LabStoryChunk.moreScenes(_retagSceneIds(moreScenes, castIds));
 
     // ── Call C: quiz ────────────────────────────────────────────────────
     final quizUser = '''
@@ -247,12 +251,130 @@ Rules: exactly 3 questions. Each option ≤12 words. Plain English.
         _ => 'Complete beginner. Use analogies first.',
       };
 
-  List<FranchiseCharacter> _parseCharacters(dynamic raw) {
-    if (raw is! List) return const [];
-    return raw
-        .whereType<Map>()
-        .map((m) => FranchiseCharacter.fromJson(Map<String, dynamic>.from(m)))
-        .toList();
+  /// Build the cast directly from the dataset. Generic ensemble if no franchise.
+  List<FranchiseCharacter> _buildCast(Franchise? franchise) {
+    const palette = ['#3B82F6', '#EF4444', '#22C55E', '#F59E0B', '#8B5CF6'];
+    if (franchise == null) {
+      return const [
+        FranchiseCharacter(
+            id: 'mentor',
+            name: 'Mentor',
+            role: 'patient teacher',
+            colorHex: '#3B82F6'),
+        FranchiseCharacter(
+            id: 'apprentice',
+            name: 'Apprentice',
+            role: 'eager learner',
+            colorHex: '#EF4444'),
+        FranchiseCharacter(
+            id: 'skeptic',
+            name: 'Skeptic',
+            role: 'asks the hard questions',
+            colorHex: '#22C55E'),
+      ];
+    }
+    final out = <FranchiseCharacter>[];
+    for (var i = 0; i < franchise.characters.length; i++) {
+      final c = franchise.characters[i];
+      out.add(FranchiseCharacter(
+        id: _slugify(c.name, fallback: 'char$i'),
+        name: c.name,
+        role: c.role,
+        colorHex: palette[i % palette.length],
+      ));
+    }
+    return out;
+  }
+
+  String _slugify(String s, {required String fallback}) {
+    final cleaned = s
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+        .replaceAll(RegExp(r'^_+|_+$'), '');
+    return cleaned.isEmpty ? fallback : cleaned;
+  }
+
+  String _castDescriptionForPrompt(
+    Franchise? franchise,
+    List<FranchiseCharacter> cast,
+  ) {
+    if (franchise == null) {
+      final lines = cast.map((c) => '- id "${c.id}" — ${c.name} (${c.role})');
+      return 'Generic cast (use these ids in characterId):\n${lines.join('\n')}';
+    }
+    final byName = {for (final p in franchise.characters) p.name: p};
+    final buf = StringBuffer('Cast personalities (refer to them by id only):');
+    for (final c in cast) {
+      final p = byName[c.name];
+      buf.writeln();
+      buf.writeln('- id "${c.id}" — ${c.name} (${c.role})');
+      if (p != null) {
+        buf.writeln('  voice: ${p.speechStyle}');
+        buf.writeln('  vibe: ${p.traits.take(3).join(', ')}');
+      }
+    }
+    return buf.toString();
+  }
+
+  /// Coerce any characterId not in the locked cast back to the first cast id.
+  List<StoryScene> _retagSceneIds(List<StoryScene> scenes, List<String> castIds) {
+    if (castIds.isEmpty) return scenes;
+    final allowed = castIds.toSet();
+    return [
+      for (final s in scenes)
+        allowed.contains(s.characterId)
+            ? s
+            : StoryScene(
+                characterId: castIds.first,
+                emotion: s.emotion,
+                dialogue: s.dialogue,
+                narration: s.narration,
+                conceptTag: s.conceptTag,
+              ),
+    ];
+  }
+
+  String _topicTitle(String topic, String difficulty) {
+    final cap = topic.isEmpty
+        ? 'Lesson'
+        : topic[0].toUpperCase() + topic.substring(1);
+    return '$cap — $difficulty';
+  }
+
+  String _scenesUserPrompt({
+    required int part,
+    required int totalParts,
+    required String topic,
+    required String difficulty,
+    required String levelHint,
+    required String castDescription,
+    required String castIdsCsv,
+    required int sceneCount,
+    required int previousScenes,
+  }) {
+    return '''
+Visual-novel lesson — part $part of $totalParts.
+Topic: $topic
+Difficulty: $difficulty
+Level guidance: $levelHint
+
+$castDescription
+
+Already shown: $previousScenes scene${previousScenes == 1 ? '' : 's'}.
+
+Output ONLY this JSON shape (no other keys, no wrapper):
+{
+  "scenes": [
+    {"characterId":"<one of $castIdsCsv>","emotion":"string","dialogue":"string","narration":"string","conceptTag":"string"}
+  ]
+}
+
+Rules:
+- Exactly $sceneCount scene${sceneCount == 1 ? '' : 's'}.
+- characterId MUST be one of $castIdsCsv. No new ids.
+- Dialogue ≤25 words. Each scene introduces ONE idea via a real-world analogy first.
+- Plain, friendly English. Avoid jargon.
+''';
   }
 
   List<StoryScene> _parseScenes(dynamic raw) {
