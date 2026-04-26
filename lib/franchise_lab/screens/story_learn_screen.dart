@@ -588,40 +588,9 @@ class _StoryLearnScreenState extends State<StoryLearnScreen> {
 
   // ── Phase: sub-topics loading ─────────────────────────────────────────────
   Widget _buildSubtopicsLoading() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: 48,
-            height: 48,
-            child: CircularProgressIndicator(
-              strokeWidth: 2.5,
-              valueColor: AlwaysStoppedAnimation(AppTheme.accentCyan),
-            ),
-          ),
-          const SizedBox(height: 18),
-          Text('BREAKING DOWN',
-              style: GoogleFonts.orbitron(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: AppTheme.accentCyan,
-                letterSpacing: 2,
-              )),
-          const SizedBox(height: 6),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Text(
-              _topic,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.orbitron(
-                fontSize: 18,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ],
-      ),
+    return _LoadingPanel(
+      detail: 'Breaking "$_topic" down into bite-sized sub-topics…',
+      accent: AppTheme.accentCyan,
     );
   }
 
@@ -664,44 +633,14 @@ class _StoryLearnScreenState extends State<StoryLearnScreen> {
 
   // ── Phase: loading ───────────────────────────────────────────────────────
   Widget _buildLoading() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: 56,
-            height: 56,
-            child: CircularProgressIndicator(
-              strokeWidth: 3,
-              valueColor: AlwaysStoppedAnimation(AppTheme.accentMagenta),
-            ),
-          ),
-          const SizedBox(height: 22),
-          Text(
-            'GEMMA IS WRITING',
-            style: GoogleFonts.orbitron(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: AppTheme.accentMagenta,
-              letterSpacing: 2,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Text(
-              _franchise == null
-                  ? 'Crafting "$_topic" at $_difficulty level…'
-                  : '${_franchise!.name} cast on duty for "$_topic"…',
-              textAlign: TextAlign.center,
-              style: AppTheme.bodyStyle(
-                fontSize: 13,
-                color: AppTheme.textSecondary,
-              ),
-            ),
-          ),
-        ],
-      ),
+    final detail = _quizPending && _story != null
+        ? 'Quiz on the way…'
+        : _franchise == null
+            ? 'Crafting "$_topic" at $_difficulty level…'
+            : '${_franchise!.name} cast on duty for "$_topic"…';
+    return _LoadingPanel(
+      detail: detail,
+      accent: AppTheme.accentMagenta,
     );
   }
 
@@ -715,7 +654,13 @@ class _StoryLearnScreenState extends State<StoryLearnScreen> {
     final character =
         story.getFranchiseCharacter(scene.characterId);
     final color = character?.color ?? AppTheme.accentMagenta;
-    final isLastScene = _sceneIdx == story.scenes.length - 1;
+
+    // Pagination: end of currently-streamed scenes? If more are still
+    // arriving, label the button "CONTINUE"; if everything is done, "TAKE THE QUIZ".
+    final atEndOfLoadedScenes = _sceneIdx == story.scenes.length - 1;
+    final isFinalEnd =
+        atEndOfLoadedScenes && !_moreScenesPending && !_quizPending;
+    final showQuizCta = atEndOfLoadedScenes && !_moreScenesPending;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
@@ -829,8 +774,11 @@ class _StoryLearnScreenState extends State<StoryLearnScreen> {
                       ),
                       const SizedBox(height: 12),
                     ],
-                    Text(
-                      scene.dialogue,
+                    _Typewriter(
+                      // Re-key on scene index so the typewriter restarts
+                      // every time the user advances.
+                      key: ValueKey('scene-$_sceneIdx'),
+                      text: scene.dialogue,
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 16,
@@ -865,10 +813,16 @@ class _StoryLearnScreenState extends State<StoryLearnScreen> {
           const SizedBox(height: 14),
           ElevatedButton.icon(
             onPressed: _nextScene,
-            icon: Icon(isLastScene
+            icon: Icon(isFinalEnd
                 ? Icons.fact_check_rounded
-                : Icons.arrow_forward_rounded),
-            label: Text(isLastScene ? 'TAKE THE QUIZ' : 'NEXT'),
+                : showQuizCta
+                    ? Icons.fact_check_rounded
+                    : Icons.arrow_forward_rounded),
+            label: Text(isFinalEnd
+                ? 'TAKE THE QUIZ'
+                : showQuizCta
+                    ? 'TAKE THE QUIZ'
+                    : 'CONTINUE'),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.accentMagenta,
               foregroundColor: Colors.black,
@@ -1326,3 +1280,167 @@ class _SubtopicCard extends StatelessWidget {
   }
 }
 
+class _LoadingPanel extends StatefulWidget {
+  const _LoadingPanel({required this.detail, required this.accent});
+
+  final String detail;
+  final Color accent;
+
+  @override
+  State<_LoadingPanel> createState() => _LoadingPanelState();
+}
+
+class _LoadingPanelState extends State<_LoadingPanel> {
+  static const _quotes = [
+    "On-device. No cloud. No spying.",
+    "Small model, big stories.",
+    "Your data stays on your phone — always.",
+    "Gemma is daydreaming up your scene…",
+    "Casting the perfect persona…",
+    "Tiny brain, mighty heart.",
+    "Building a lesson, one analogy at a time.",
+    "Offline-first. Friend-shaped AI.",
+    "Picking words a 10-year-old would love.",
+    "Compressing wisdom into pocket-sized scenes.",
+  ];
+
+  late final Stream<int> _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = Stream.periodic(
+      const Duration(seconds: 3),
+      (i) => i % _quotes.length,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 56,
+              height: 56,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                valueColor: AlwaysStoppedAnimation(widget.accent),
+              ),
+            ),
+            const SizedBox(height: 22),
+            Text(
+              "GEMMA IS WRITING",
+              style: GoogleFonts.orbitron(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: widget.accent,
+                letterSpacing: 2,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              widget.detail,
+              textAlign: TextAlign.center,
+              style: AppTheme.bodyStyle(
+                fontSize: 13,
+                color: AppTheme.textSecondary,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 30),
+            StreamBuilder<int>(
+              stream: _ticker,
+              initialData: 0,
+              builder: (_, snap) {
+                final idx = snap.data ?? 0;
+                return AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 350),
+                  child: Text(
+                    _quotes[idx],
+                    key: ValueKey(idx),
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.spaceGrotesk(
+                      fontStyle: FontStyle.italic,
+                      fontSize: 13,
+                      color: Colors.white60,
+                      height: 1.4,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Reveals [text] one character at a time. Tap to skip the animation.
+class _Typewriter extends StatefulWidget {
+  const _Typewriter({
+    super.key,
+    required this.text,
+    required this.style,
+    this.charDelay = const Duration(milliseconds: 22),
+  });
+
+  final String text;
+  final TextStyle style;
+  final Duration charDelay;
+
+  @override
+  State<_Typewriter> createState() => _TypewriterState();
+}
+
+class _TypewriterState extends State<_Typewriter> {
+  int _shown = 0;
+  bool _done = false;
+  bool _cancelled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _run();
+  }
+
+  Future<void> _run() async {
+    final total = widget.text.characters.length;
+    while (_shown < total && !_cancelled && mounted) {
+      await Future.delayed(widget.charDelay);
+      if (!mounted || _cancelled) return;
+      setState(() => _shown++);
+    }
+    if (mounted) setState(() => _done = true);
+  }
+
+  void _skip() {
+    if (_done) return;
+    setState(() {
+      _shown = widget.text.characters.length;
+      _cancelled = true;
+      _done = true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = widget.text.characters.take(_shown).toString();
+    return GestureDetector(
+      onTap: _skip,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 80),
+        alignment: Alignment.topLeft,
+        child: Text(
+          visible,
+          style: widget.style,
+        ),
+      ),
+    );
+  }
+}
