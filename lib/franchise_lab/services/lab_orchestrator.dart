@@ -68,23 +68,46 @@ class LabOrchestrator {
   }
 
   /// Try strict parse first; on failure, try repairing a truncated/unterminated
-  /// response. Returns null if both fail.
+  /// response. Returns null if both fail. Also tolerates Gemma wrapping the
+  /// real payload in an extra outer key like {"story_lesson": {...real...}}.
   Map<String, dynamic>? _tryParseOrRepair(String raw) {
     if (raw.trim().isEmpty) return null;
+
+    Map<String, dynamic>? decoded;
     try {
-      return _parseJson(raw);
+      decoded = _parseJson(raw);
     } catch (_) {
       // Fall through to repair.
     }
-    try {
-      final repaired = _repairTruncatedJson(raw);
-      if (repaired == null) return null;
-      final decoded = jsonDecode(repaired);
-      if (decoded is Map<String, dynamic>) return decoded;
-    } catch (e) {
-      debugPrint('[Lab] repair failed: $e');
+    if (decoded == null) {
+      try {
+        final repaired = _repairTruncatedJson(raw);
+        if (repaired != null) {
+          final v = jsonDecode(repaired);
+          if (v is Map<String, dynamic>) decoded = v;
+        }
+      } catch (e) {
+        debugPrint('[Lab] repair failed: $e');
+      }
     }
-    return null;
+    if (decoded == null) return null;
+
+    // Schema keys we actually use across the lab calls.
+    const expected = {
+      'title', 'characters', 'scenes', 'quiz', 'subtopics',
+    };
+    final hasExpected = decoded.keys.any(expected.contains);
+    if (hasExpected) return decoded;
+
+    // No expected keys — Gemma probably wrapped it. If there's exactly one
+    // Map child, hoist it.
+    final mapChildren = decoded.entries.where((e) => e.value is Map).toList();
+    if (mapChildren.length == 1) {
+      final unwrapped = Map<String, dynamic>.from(mapChildren.first.value as Map);
+      debugPrint('[Lab] unwrapped outer key "${mapChildren.first.key}"');
+      return unwrapped;
+    }
+    return decoded;
   }
 
   /// Repair a JSON object that was cut off mid-stream (model hit a token cap
