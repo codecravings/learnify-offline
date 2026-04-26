@@ -19,6 +19,77 @@ class LabOrchestrator {
   final _gemma = GemmaService.instance;
   final _memory = LabMemoryService.instance;
 
+  // ── SUB-TOPICS ─────────────────────────────────────────────────────────────
+
+  /// Break a topic into a list of sub-topics so the user can pick which
+  /// concept to learn first. Difficulty drives how many we ask for.
+  /// Returns a list of `{title, description}` maps.
+  Future<List<Map<String, dynamic>>> generateSubtopics({
+    required String topic,
+    required String difficulty,
+  }) async {
+    final count = switch (difficulty) {
+      'intermediate' => 6,
+      'advanced' => 8,
+      _ => 5,
+    };
+    final depth = switch (difficulty) {
+      'intermediate' => 'normal',
+      'advanced' => 'deep',
+      _ => 'normal',
+    };
+    final systemPrompt = '''
+You are the Sub-topic Splitter. Output ONLY a JSON object — no prose, no markdown.
+First char "{", last char "}".
+
+Break "$topic" into EXACTLY $count sub-topics suited for a $difficulty learner.
+
+RULES:
+- Use simple, friendly English. NO jargon. NO heavy academic words.
+- Each "title" is a real concept name in 2-5 words a 10-year-old could understand.
+- Each "description" is one short sentence (under 18 words) about what the sub-topic covers.
+- Order from easiest to hardest.
+- Avoid these words entirely: encapsulation, polymorphism, abstraction, paradigm, leverage, ecosystem, vectorization, deployment, modularity, methodology, framework, optimization.
+
+SCHEMA:
+{"subtopics":[{"title":"...","description":"..."}]}
+
+EXAMPLE for topic "Fractions" at beginner level, count=5:
+{"subtopics":[{"title":"What is a Fraction","description":"How a fraction shows part of a whole, like a slice of pizza."},{"title":"Numerator and Denominator","description":"The top number tells how many pieces; the bottom tells the total."},{"title":"Equivalent Fractions","description":"Different fractions that show the same amount, like 1/2 and 2/4."},{"title":"Comparing Fractions","description":"Which slice is bigger? Easy ways to tell."},{"title":"Adding Fractions","description":"How to add fractions when the bottoms match."}]}
+''';
+
+    Future<String> run(String user) => _gemma.generate(
+          systemPrompt: systemPrompt,
+          userPrompt: user,
+          maxTokens: 2048,
+        );
+
+    String raw = await run(
+        'Topic: "$topic". Difficulty: $difficulty. Count: $count. Output the JSON now.');
+    debugPrint('[Lab.subtopics] raw 1 length=${raw.length} depth=$depth');
+    var parsed = _tryParseOrRepair(raw);
+    if (parsed == null) {
+      raw = await run(
+          'Your previous response was unusable. Topic: "$topic". Output ONLY a JSON object with key "subtopics" containing exactly $count entries. Start with { and end with }.');
+      debugPrint('[Lab.subtopics] raw 2 length=${raw.length}');
+      parsed = _tryParseOrRepair(raw);
+    }
+    if (parsed == null) return const [];
+    final list = parsed['subtopics'];
+    if (list is! List) return const [];
+    final placeholderRe = RegExp(
+      r'^(sub[\s\-]?topic|topic|item|subtopic|untitled)\s*\d*$',
+      caseSensitive: false,
+    );
+    return list
+        .whereType<Map>()
+        .map((m) => Map<String, dynamic>.from(m))
+        .where((m) {
+      final t = (m['title'] as String?)?.trim() ?? '';
+      return t.isNotEmpty && !placeholderRe.hasMatch(t);
+    }).toList();
+  }
+
   // ── STORY ──────────────────────────────────────────────────────────────────
 
   /// Generates a franchise-styled story lesson in a single Gemma call.
