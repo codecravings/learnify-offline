@@ -1,6 +1,6 @@
 # Learnify — Offline AI Learning Companion
 
-> A fully on-device, multi-agent learning app powered by **Gemma 4 E4B** running
+> A fully on-device, multi-agent learning app powered by **Gemma 4 E2B** running
 > locally via LiteRT-LM. Zero cloud calls. Zero API keys. Zero data leaves the
 > device. Built for the **Kaggle Gemma 4 Good Hackathon** (Future of Education).
 
@@ -18,7 +18,7 @@ phone*. Once it's installed, the app never touches the internet again.
 
 ## What's inside
 
-- **7 specialized agents** sharing one Gemma 4 E4B instance (Story, Tutor, Quiz,
+- **7 specialized agents** sharing one Gemma 4 E2B instance (Story, Tutor, Quiz,
   Planner, Explorer, Learner Twin, Teacher, Image Analysis) — routed via
   system prompts through a single orchestrator
 - **Multimodal scanning** — point the camera at any textbook page, Gemma
@@ -61,7 +61,7 @@ flutter run -d <DEVICE_ID>
 ### First launch
 
 1. Setup screen asks for name + grade + language
-2. Model download screen pulls Gemma 4 E4B (~3.65 GB, one-time)
+2. Model download screen pulls Gemma 4 E2B (~2.5 GB, one-time)
 3. App becomes permanently offline
 
 ### Want to test in airplane mode?
