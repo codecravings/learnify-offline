@@ -10,7 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # On-device AI — Gemma 4 E4B via LiteRT-LM
+  # On-device AI — Gemma 4 E2B via LiteRT-LM
   flutter_gemma: ^0.13.5
 
   # State Management
