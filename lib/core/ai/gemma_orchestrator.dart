@@ -11,7 +11,7 @@ import 'gemma_service.dart';
 
 /// Routes requests to the correct Gemma 4 agent based on intent.
 ///
-/// All agents share one on-device Gemma 4 E4B instance.
+/// All agents share one on-device Gemma 4 E2B instance.
 /// Agent identity = system prompt. The orchestrator selects the right one.
 class GemmaOrchestrator {
   GemmaOrchestrator._();
