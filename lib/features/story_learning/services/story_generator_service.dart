@@ -3,7 +3,7 @@ import '../../../features/courses/data/course_data.dart';
 import '../models/story_response.dart';
 import '../models/story_style.dart';
 
-/// Thin adapter — delegates to GemmaOrchestrator (on-device Gemma 4 E4B).
+/// Thin adapter — delegates to GemmaOrchestrator (on-device Gemma 4 E2B).
 ///
 /// Kept as a service class so existing screens can be migrated without
 /// rewriting call sites. All heavy lifting lives in GemmaOrchestrator.
@@ -13,7 +13,7 @@ class StoryGeneratorService {
   final _orchestrator = GemmaOrchestrator.instance;
 
   /// Generates a story for the given lesson and style.
-  /// On-device Gemma 4 E4B reads past learning from SQLite and adapts.
+  /// On-device Gemma 4 E2B reads past learning from SQLite and adapts.
   Future<StoryResponse> generateStory({
     required Lesson lesson,
     required String subjectId,
