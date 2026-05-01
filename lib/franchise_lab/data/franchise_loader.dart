@@ -44,17 +44,30 @@ class Franchise {
     required this.name,
     required this.category,
     required this.characters,
+    this.ageRating = 'all',
+    this.worldSetting = '',
+    this.topicAffinity = const [],
   });
 
   final String id;
   final String name;
-  final String category; // 'anime' | 'cartoons' | 'live_action' | 'movies' | 'indian'
+  // 'anime' | 'cartoons' | 'live_action' | 'movies' | 'indian' | 'k_drama' | 'gaming'
+  final String category;
+  // 'all' | '13+' | '16+' | '18+'
+  final String ageRating;
+  final String worldSetting;
+  final List<String> topicAffinity;
   final List<FranchisePersona> characters;
 
   factory Franchise.fromJson(Map<String, dynamic> j) => Franchise(
         id: j['id'] as String,
         name: j['name'] as String,
         category: j['category'] as String? ?? 'misc',
+        ageRating: j['age_rating'] as String? ?? 'all',
+        worldSetting: j['world_setting'] as String? ?? '',
+        topicAffinity:
+            (j['topic_affinity'] as List?)?.map((e) => e.toString()).toList() ??
+            const [],
         characters: (j['characters'] as List?)
                 ?.map((e) => FranchisePersona.fromJson(e as Map<String, dynamic>))
                 .toList() ??
