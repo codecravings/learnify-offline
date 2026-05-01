@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This repo was previously a cloud-AI + Firebase app (DeepSeek/Groq/Hindsight, Firestore, Cloud Functions). It has been rewritten for the **Kaggle Gemma 4 Good Hackathon** as a **fully on-device, offline-after-bootstrap** app:
 
-- **AI:** All inference runs locally via `flutter_gemma` (LiteRT-LM) using `gemma-4-E4B-it.litertlm` (~3.65 GB). No DeepSeek, no Groq, no Hindsight, no Gemini API.
+- **AI:** All inference runs locally via `flutter_gemma` (LiteRT-LM) using `gemma-4-E2B-it.litertlm` (~2.58 GB). No DeepSeek, no Groq, no Hindsight, no Gemini API.
 - **Storage:** SQLite (`sqflite`) via `lib/core/db/app_database.dart`. No Firestore, no Firebase Auth, no Cloud Functions.
 - **Profiles:** Local-only via `LocalProfileService` — name/grade/language, multiple profiles supported (student + teacher demo mode). No login, no password.
 - **Memory:** `LocalMemoryService` replaces Hindsight — same "retrieve past events → inject into prompt" pattern, but reads from SQLite.
@@ -42,12 +42,12 @@ flutter analyze
 
 ### Model acquisition — two paths
 
-1. **Network download** (`ModelDownloadScreen` → `GemmaService.initialize`): pulls from `huggingface.co/litert-community/gemma-4-E4B-it-litert-lm`.
-2. **Sideload** (`GemmaService.initializeFromFile`): push the `.litertlm` file to `/storage/emulated/0/Android/data/com.vidyasetu.vidyasetu/files/gemma-4-E4B-it.litertlm` via adb or Files app, then the setup screen offers an "Import from device" option. The service then copies the file to internal app storage (sdcard mmap is flaky on Android) before `FlutterGemma.installModel().fromFile()`.
+1. **Network download** (`ModelDownloadScreen` → `GemmaService.initialize`): pulls from `huggingface.co/litert-community/gemma-4-E2B-it-litert-lm`.
+2. **Sideload** (`GemmaService.initializeFromFile`): push the `.litertlm` file to `/storage/emulated/0/Android/data/com.vidyasetu.vidyasetu/files/gemma-4-E2B-it.litertlm` via adb or Files app, then the setup screen offers an "Import from device" option. The service then copies the file to internal app storage (sdcard mmap is flaky on Android) before `FlutterGemma.installModel().fromFile()`.
 
 Either way, after install `GemmaService` eagerly calls `getActiveModel` to warm the engine so errors surface at setup, not on first chat.
 
-`GemmaService` supports both **E4B** (default for the main app) and **E2B** (smaller/faster, preferred by the Franchise Lab) variants. Use `findVariantFile(modelId)` + `activateVariant(modelId)` to switch between them at runtime if both are on disk.
+E2B is the only supported model. The earlier E4B variant + variant-switching API (`findVariantFile` / `activateVariant` / `e2bModelId` constant) was removed — don't reintroduce it without a strong reason.
 
 ### Android requirements (`android/app/build.gradle.kts`)
 
