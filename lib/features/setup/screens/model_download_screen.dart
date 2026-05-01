@@ -5,7 +5,7 @@ import '../../../core/ai/gemma_service.dart';
 import '../../../core/services/local_profile_service.dart';
 import '../../../core/theme/app_theme.dart';
 
-/// Downloads Gemma 4 E4B on first launch (~3.65 GB, one-time only).
+/// Downloads Gemma 4 E2B on first launch (~2.58 GB, one-time only).
 /// Shows animated progress with storage/requirement info.
 class ModelDownloadScreen extends StatefulWidget {
   const ModelDownloadScreen({super.key});
@@ -85,7 +85,7 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen>
     setState(() {
       _downloading = true;
       _error = false;
-      _status = 'Downloading Gemma 4 E4B...';
+      _status = 'Downloading Gemma 4 E2B...';
     });
 
     try {
@@ -159,7 +159,7 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen>
               ),
               const SizedBox(height: 8),
               Text(
-                'Powered by Gemma 4 E4B',
+                'Powered by Gemma 4 E2B',
                 style: TextStyle(color: AppTheme.accentCyan, fontSize: 15),
               ),
               const SizedBox(height: 16),
@@ -188,7 +188,7 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen>
                 const SizedBox(height: 8),
                 if (_progress > 0)
                   Text(
-                    '${(_progress * 3.65).toStringAsFixed(2)} GB / 3.65 GB',
+                    '${(_progress * 2.58).toStringAsFixed(2)} GB / 2.58 GB',
                     style: TextStyle(color: Colors.white38, fontSize: 12),
                   ),
               ] else ...[
@@ -247,7 +247,7 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen>
                           borderRadius: BorderRadius.circular(12)),
                     ),
                     child: Text(
-                      _error ? 'Retry Download' : 'Download Gemma 4 E4B (3.65 GB)',
+                      _error ? 'Retry Download' : 'Download Gemma 4 E2B (2.58 GB)',
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                     ),
                   ),
@@ -283,8 +283,8 @@ class _RequirementCard extends StatelessWidget {
         children: [
           Text('Requirements', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
-          _req('Storage', '~4 GB free space'),
-          _req('RAM', '6 GB+ recommended'),
+          _req('Storage', '~3 GB free space'),
+          _req('RAM', '4 GB+ recommended'),
           _req('GPU', 'Accelerated on most Android phones'),
           _req('Internet', 'Only for this one-time download'),
         ],
