@@ -745,7 +745,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
         title: Text('About',
             style: GoogleFonts.orbitron(color: Colors.white)),
         content: Text(
-          'Learnify · Gemma 4 E4B on-device\n\n'
+          'Learnify · Gemma 4 E2B on-device\n\n'
           'All learning happens privately on your phone. '
           'No servers, no cloud, no account needed.',
           style: GoogleFonts.spaceGrotesk(
