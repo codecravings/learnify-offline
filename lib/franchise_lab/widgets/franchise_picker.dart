@@ -58,6 +58,10 @@ class _FranchisePickerSheetState extends State<FranchisePickerSheet> {
         return AppTheme.accentPurple;
       case 'indian':
         return AppTheme.accentGreen;
+      case 'k_drama':
+        return const Color(0xFFFF6B9D);
+      case 'gaming':
+        return const Color(0xFF00FF88);
       default:
         return AppTheme.accentCyan;
     }
@@ -75,6 +79,10 @@ class _FranchisePickerSheetState extends State<FranchisePickerSheet> {
         return 'MOVIE';
       case 'indian':
         return 'INDIAN';
+      case 'k_drama':
+        return 'K-DRAMA';
+      case 'gaming':
+        return 'GAMING';
       default:
         return category.toUpperCase();
     }
