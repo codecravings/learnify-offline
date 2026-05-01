@@ -78,12 +78,12 @@ class GemmaService {
     }
   }
 
-  /// Legacy external sideload path (pushed via `adb push`).
+  /// External sideload path (pushed via `adb push`).
   /// On Android 11+ the app process can't always read this location (scoped
   /// storage + SELinux), so we also check an internal documents path that
   /// the app *always* has access to.
   static const sideloadedPath =
-      '/storage/emulated/0/Android/data/com.vidyasetu.vidyasetu/files/gemma-4-E4B-it.litertlm';
+      '/storage/emulated/0/Android/data/com.vidyasetu.vidyasetu/files/$_modelId';
 
   Future<String> _internalModelPath() async {
     final docs = await getApplicationDocumentsDirectory();
