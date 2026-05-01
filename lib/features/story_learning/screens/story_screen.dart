@@ -54,7 +54,7 @@ class _StoryScreenState extends State<StoryScreen> {
 
   Map<String, dynamic>? _levelAssessment;
   bool _assessing = false;
-  String _loadingStage = 'Calling Gemma 4 E4B on-device…';
+  String _loadingStage = 'Calling Gemma 4 E2B on-device…';
 
   StoryResponse? _story;
   int _sceneIndex = 0;
@@ -160,7 +160,7 @@ class _StoryScreenState extends State<StoryScreen> {
       await Future.delayed(const Duration(milliseconds: 300));
       if (mounted) {
         setState(() =>
-            _loadingStage = 'Gemma 4 E4B is crafting your ${_style.label.toLowerCase()} lesson…');
+            _loadingStage = 'Gemma 4 E2B is crafting your ${_style.label.toLowerCase()} lesson…');
       }
 
       final story = await _orchestrator.generateStory(
