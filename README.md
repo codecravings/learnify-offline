@@ -9,7 +9,7 @@
 Built for the **Kaggle Gemma 4 Good Hackathon** 🌍✨ *(Future of Education)*
 
 ![flutter](https://img.shields.io/badge/flutter-3.x-blue)
-![gemma](https://img.shields.io/badge/gemma-4--E4B-purple)
+![gemma](https://img.shields.io/badge/gemma-4--E2B-purple)
 ![offline](https://img.shields.io/badge/runtime-on--device-green)
 
 ---
@@ -130,7 +130,7 @@ Your learning belongs to **you** ❤️
 
 | Layer         | Choice                                      |
 | ------------- | ------------------------------------------- |
-| 🧠 Model      | `litert-community/gemma-4-E4B-it-litert-lm` |
+| 🧠 Model      | `litert-community/gemma-4-E2B-it-litert-lm` |
 | ⚙ Runtime     | `flutter_gemma` v0.13.5                     |
 | 📱 Framework  | Flutter 3.x                                 |
 | 🧭 Navigation | go_router                                   |
