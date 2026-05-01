@@ -24,15 +24,6 @@ class GemmaService {
   bool _modelReady = false;
   bool get isReady => _modelReady;
 
-  /// ID of the currently active model (which variant we last warmed).
-  /// Useful for lab vs main-app preference logic.
-  String _activeModelId = _modelId;
-  String get activeModelId => _activeModelId;
-
-  /// Lighter Gemma 4 variant — ~2.4 GB instead of 3.4 GB. Used by Franchise
-  /// Lab for faster on-device generation. Same prompt API, different file.
-  static const e2bModelId = 'gemma-4-E2B-it.litertlm';
-
   /// Single token ceiling for ALL text generation calls. Varying maxTokens
   /// across calls forces flutter_gemma to rebuild the InferenceModel, which
   /// is fragile on-device and surfaces as "unable to load model" after a few
@@ -105,52 +96,6 @@ class GemmaService {
 
   Future<bool> hasSideloadedFile() async =>
       (await findSideloadedFile()) != null;
-
-  /// Look for any specific model variant by id (e.g. [e2bModelId]).
-  /// Returns the absolute on-device path if present, else null.
-  Future<String?> findVariantFile(String modelId) async {
-    try {
-      final docs = await getApplicationDocumentsDirectory();
-      final p = '${docs.path}/$modelId';
-      if (await File(p).exists()) return p;
-    } catch (_) {}
-    try {
-      const externalRoot =
-          '/storage/emulated/0/Android/data/com.vidyasetu.vidyasetu/files';
-      final p = '$externalRoot/$modelId';
-      if (await File(p).exists()) return p;
-    } catch (_) {}
-    return null;
-  }
-
-  /// Switch the active model to [modelId] from its on-disk path. Idempotent.
-  /// flutter_gemma keeps multiple models installed but only one active at a
-  /// time; calling installModel().fromFile().install() makes that variant
-  /// the new active one. Cheap if it was already active.
-  Future<bool> activateVariant(String modelId) async {
-    if (_activeModelId == modelId && _modelReady) return true;
-    final path = await findVariantFile(modelId);
-    if (path == null) {
-      debugPrint('[Gemma] activateVariant($modelId) — file not found');
-      return false;
-    }
-    try {
-      await FlutterGemma.installModel(
-        modelType: ModelType.gemmaIt,
-        fileType: ModelFileType.litertlm,
-      ).fromFile(path).install();
-      await FlutterGemma.getActiveModel(maxTokens: _textMaxTokens);
-      _modelReady = FlutterGemma.hasActiveModel();
-      if (_modelReady) {
-        _activeModelId = modelId;
-        debugPrint('[Gemma] active variant → $modelId');
-      }
-      return _modelReady;
-    } catch (e) {
-      debugPrint('[Gemma] activateVariant($modelId) failed: $e');
-      return false;
-    }
-  }
 
   /// Install the model from a pre-pushed file on device — zero network.
   /// Eagerly loads the engine into RAM so errors surface here, not on first chat.

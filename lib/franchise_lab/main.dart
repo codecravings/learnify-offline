@@ -30,13 +30,6 @@ Future<void> main() async {
     } catch (_) {/* surfaced in UI */}
   }
 
-  // Lab prefers Gemma 4 E2B (smaller + faster). If that variant is on disk,
-  // switch the active model to it. Falls back to whatever loaded above
-  // (typically E4B from the main app's setup).
-  if (await GemmaService.instance.findVariantFile(GemmaService.e2bModelId) != null) {
-    await GemmaService.instance.activateVariant(GemmaService.e2bModelId);
-  }
-
   // Lab uses isolated DB.
   await LabProfileService.instance.initialize();
 
