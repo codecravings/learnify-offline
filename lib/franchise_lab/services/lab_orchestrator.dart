@@ -267,8 +267,10 @@ Rules:
       ];
     }
     final out = <FranchiseCharacter>[];
-    for (var i = 0; i < franchise.characters.length; i++) {
-      final c = franchise.characters[i];
+    // Cap at 4 characters — visual novels stay coherent; DB can have 6 for variety.
+    final chars = franchise.characters.take(4).toList();
+    for (var i = 0; i < chars.length; i++) {
+      final c = chars[i];
       out.add(FranchiseCharacter(
         id: _slugify(c.name, fallback: 'char$i'),
         name: c.name,
@@ -645,6 +647,7 @@ prompt asks for in this turn.
     // story has the WOW factor of an actual cameo.
     final buf = StringBuffer()
       ..writeln('## Franchise Mode — ${f.name}')
+      ..writeln(f.worldSetting.isNotEmpty ? 'Setting: ${f.worldSetting}' : '')
       ..writeln('Cast (use the NAME column verbatim in your output):');
 
     for (final c in f.characters) {
