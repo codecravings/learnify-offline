@@ -26,6 +26,10 @@ dart run build_runner build --delete-conflicting-outputs
 flutter devices
 flutter run -d <DEVICE_ID> --dart-define=HF_TOKEN=<optional_hf_token>
 
+# Run the Franchise Lab subapp instead (separate entrypoint, isolated DB,
+# requires the main app to have already installed the model)
+flutter run -t lib/franchise_lab/main.dart -d <DEVICE_ID>
+
 # Build
 flutter build apk --debug
 flutter install -d <DEVICE_ID> --debug
@@ -42,6 +46,8 @@ flutter analyze
 2. **Sideload** (`GemmaService.initializeFromFile`): push the `.litertlm` file to `/storage/emulated/0/Android/data/com.vidyasetu.vidyasetu/files/gemma-4-E4B-it.litertlm` via adb or Files app, then the setup screen offers an "Import from device" option. The service then copies the file to internal app storage (sdcard mmap is flaky on Android) before `FlutterGemma.installModel().fromFile()`.
 
 Either way, after install `GemmaService` eagerly calls `getActiveModel` to warm the engine so errors surface at setup, not on first chat.
+
+`GemmaService` supports both **E4B** (default for the main app) and **E2B** (smaller/faster, preferred by the Franchise Lab) variants. Use `findVariantFile(modelId)` + `activateVariant(modelId)` to switch between them at runtime if both are on disk.
 
 ### Android requirements (`android/app/build.gradle.kts`)
 
@@ -71,6 +77,8 @@ lib/
 │   └── utils/
 ├── features/         # setup/, auth/, story_learning/, companion/, scan/, teacher/,
 │                     # courses/, profile/, achievements/, skill_tree/, knowledge_graph/, search/
+├── franchise_lab/    # Parallel experimental subapp — own main.dart, isolated DB,
+│                     # franchise-persona Story Learn + Companion + Profile (see below)
 ├── models/           # Mostly legacy; story models live under features/story_learning/models/
 ├── routes/app_router.dart
 └── main.dart         # FlutterGemma.initialize → LocalProfileService.initialize → runApp
@@ -138,6 +146,49 @@ Uses `GemmaOrchestrator.getStudyPulse` for the auto-generated top card, `queryLe
 ### Teacher Copilot (`features/teacher/screens/teacher_copilot_screen.dart`)
 
 Aggregates all local profiles (all students on the device) → passes to `GemmaOrchestrator.teacherQuery` with a class-data block.
+
+## Franchise Lab (parallel subapp)
+
+`lib/franchise_lab/` is an **additive, isolated** experimental app that lives alongside the main Learnify build. It's run as a separate Flutter target (`flutter run -t lib/franchise_lab/main.dart`) and shares only `GemmaService`, `AppTheme`, and the story-response models with production code. It does **not** modify any main-app source.
+
+Why it exists: validate whether the smaller **Gemma 4 E2B** model can drive a "franchise-style" story-learning experience before merging anything back into the main flow.
+
+Key boundaries:
+
+- **Isolated DB** — `lab_database.dart` opens `franchise_lab.db` (separate SQLite file from the main app's `app_database.db`). Killing one does not affect the other.
+- **Mirror services** — `LabProfileService` and `LabMemoryService` mirror the API of the main `LocalProfileService` / `LocalMemoryService` but write to the lab DB. `LabMemoryService` adds `bumpFranchiseUsage` for tracking favorite franchises.
+- **`LabOrchestrator`** — does **not** use `GemmaOrchestrator`. It builds its own system prompts that swap in **franchise persona blocks** loaded from `assets/data/franchises.json` (**80 franchises × 6 characters × 5-6 dialogues each**, IP-safe generic-role characters). It calls `GemmaService.generate` directly and retries on JSON parse failure with a "shorter scenes" prompt. `_buildCast` limits the story cast to `take(4)` for coherence; `_franchisePersonaBlock` injects `world_setting`, `speechStyle`, and first dialogue only — extra dialogues in DB don't add prompt tokens.
+- **Model preference** — at startup, if a Gemma 4 E2B `.litertlm` is on disk, the lab activates it via `GemmaService.activateVariant(GemmaService.e2bModelId)`. Otherwise it falls back to whatever the main app installed (typically E4B).
+- **Refuses to launch without the model** — shows `_ModelMissingScreen` if `GemmaService.isReady` is false. The lab does not run model setup itself; the user must open the main app first.
+
+3-tab `LabShell` (own bottom nav, not the main app's): **Story Learn** (7-phase: topic → difficulty → franchise picker → loading → story → quiz → results), **Companion** (streaming Learner Twin), **Profile** (XP/streak/mastered/weak topics + favorite franchises + recent activity).
+
+### Franchise dataset (`assets/data/franchises.json`)
+
+**Version 2** — 80 franchises, 6 characters each, 5-6 dialogues per character.
+
+Category breakdown: anime (21), live_action (14), movies (12), cartoons (11), indian (11), gaming (5), k_drama (6).
+
+**Schema fields per franchise entry:**
+
+```json
+{
+  "id": "naruto",
+  "name": "Naruto",
+  "category": "anime",
+  "age_rating": "all",
+  "world_setting": "One-line setting description injected into the persona block",
+  "topic_affinity": ["physics", "biology"],
+  "characters": [{ "name": "...", "role": "...", "traits": [], "speech_style": "...", "humor_style": "...", "emotional_style": "...", "teaching_style": "...", "sample_dialogues": [] }]
+}
+```
+
+- `age_rating`: `"all"` | `"13+"` | `"16+"` | `"18+"` — reserved for future content filtering
+- `category` now includes `"k_drama"` and `"gaming"` in addition to the original five
+- `Franchise` Dart model in `franchise_loader.dart` has corresponding `ageRating`, `worldSetting`, `topicAffinity` fields
+- `FranchisePickerSheet` in `franchise_picker.dart` handles all 7 categories with distinct colors (k_drama: `0xFFFF6B9D`, gaming: `0xFF00FF88`)
+
+When extending the lab: keep it self-contained. If you need a feature from the main app, copy or shim it inside `franchise_lab/`. The whole point is that the lab can be deleted without breaking the main app.
 
 ### Theme (`lib/core/theme/app_theme.dart`)
 
