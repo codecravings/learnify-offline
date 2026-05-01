@@ -151,14 +151,13 @@ Aggregates all local profiles (all students on the device) → passes to `GemmaO
 
 `lib/franchise_lab/` is an **additive, isolated** experimental app that lives alongside the main Learnify build. It's run as a separate Flutter target (`flutter run -t lib/franchise_lab/main.dart`) and shares only `GemmaService`, `AppTheme`, and the story-response models with production code. It does **not** modify any main-app source.
 
-Why it exists: validate whether the smaller **Gemma 4 E2B** model can drive a "franchise-style" story-learning experience before merging anything back into the main flow.
+Why it exists: validate a "franchise-style" story-learning experience driven by **Gemma 4 E2B** (the same model the main app uses) before merging anything back into the main flow.
 
 Key boundaries:
 
 - **Isolated DB** — `lab_database.dart` opens `franchise_lab.db` (separate SQLite file from the main app's `app_database.db`). Killing one does not affect the other.
 - **Mirror services** — `LabProfileService` and `LabMemoryService` mirror the API of the main `LocalProfileService` / `LocalMemoryService` but write to the lab DB. `LabMemoryService` adds `bumpFranchiseUsage` for tracking favorite franchises.
 - **`LabOrchestrator`** — does **not** use `GemmaOrchestrator`. It builds its own system prompts that swap in **franchise persona blocks** loaded from `assets/data/franchises.json` (**80 franchises × 6 characters × 5 dialogues each**, IP-safe generic-role characters). It calls `GemmaService.generate` directly and retries on JSON parse failure with a "shorter scenes" prompt. `_buildCast` limits the story cast to `take(4)` for coherence; `_franchisePersonaBlock` injects `world_setting`, `speechStyle`, and first dialogue only — extra dialogues in DB don't add prompt tokens.
-- **Model preference** — at startup, if a Gemma 4 E2B `.litertlm` is on disk, the lab activates it via `GemmaService.activateVariant(GemmaService.e2bModelId)`. Otherwise it falls back to whatever the main app installed (typically E4B).
 - **Refuses to launch without the model** — shows `_ModelMissingScreen` if `GemmaService.isReady` is false. The lab does not run model setup itself; the user must open the main app first.
 
 3-tab `LabShell` (own bottom nav, not the main app's): **Story Learn** (7-phase: topic → difficulty → franchise picker → loading → story → quiz → results), **Companion** (streaming Learner Twin), **Profile** (XP/streak/mastered/weak topics + favorite franchises + recent activity).
