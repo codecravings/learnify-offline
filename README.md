@@ -150,15 +150,15 @@ flutter run -d <DEVICE_ID>
 ### 📱 Device Requirements
 
 ✅ Android 12+
-✅ 6GB+ RAM
-✅ ~5GB free storage
+✅ 4GB+ RAM
+✅ ~3GB free storage
 
 ---
 
 # 🎉 First Launch Experience
 
 1️⃣ Enter name + grade + language
-2️⃣ One-time Gemma model download (~2.5GB)
+2️⃣ One-time Gemma model download (~2.58 GB)
 3️⃣ Done forever ✅
 
 After that:
