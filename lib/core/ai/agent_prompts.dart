@@ -1,6 +1,6 @@
 /// System prompt templates for each Learnify agent.
 ///
-/// All agents share one Gemma 4 E4B instance — they are distinguished by
+/// All agents share one Gemma 4 E2B instance — they are distinguished by
 /// their system prompts. The orchestrator selects the right agent per request.
 abstract class AgentPrompts {
   // ── STORY AGENT ────────────────────────────────────────────────────────────
