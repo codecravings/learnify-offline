@@ -181,7 +181,7 @@ EXAMPLE for topic "Fractions" at beginner level, count=5:
       castDescription: castDescription,
       castIdsCsv: castIdsCsv,
       sceneCount: 3,
-      previousScenes: 0,
+      previousScenes: const [],
     );
     final intro = await _runJsonRetry('scenes1', systemPrompt, introUser);
     final scenes1 = intro == null ? const <StoryScene>[] : _parseScenes(intro['scenes']);
@@ -206,17 +206,18 @@ EXAMPLE for topic "Fractions" at beginner level, count=5:
       castDescription: castDescription,
       castIdsCsv: castIdsCsv,
       sceneCount: 3,
-      previousScenes: scenes1.length,
+      previousScenes: scenes1,
     );
     final more = await _runJsonRetry('scenes2', systemPrompt, moreUser);
     final scenes2 = more == null ? const <StoryScene>[] : _parseScenes(more['scenes']);
     yield LabStoryChunk.moreScenes(_retagSceneIds(scenes2, castIds));
 
     // ── Call C: scenes 7-8 + quiz ───────────────────────────────────────
+    final priorSummary = _previousScenesSummary([...scenes1, ...scenes2]);
     final finalUser = '''
 Final part of the lesson. Topic: "$topic". Cast: $castIdsCsv.
 
-Already shown: ${scenes1.length + scenes2.length} scenes.
+$priorSummary
 
 Output ONLY this JSON (BOTH keys, in this exact shape):
 {
@@ -233,6 +234,8 @@ Rules:
 - "quiz" has exactly 3 questions reviewing what was taught.
 - Dialogue ≤25 words. Quiz options ≤12 words.
 - Use ONLY characterId values from $castIdsCsv. No new character ids.
+- Do NOT repeat any dialogue or narration verbatim from the prior scenes.
+  Build on what was said; introduce the closing insight.
 ''';
     final tail = await _runJsonRetry('finalScenesQuiz', systemPrompt, finalUser);
     final scenes3 = tail == null ? const <StoryScene>[] : _parseScenes(tail['scenes']);
@@ -348,7 +351,7 @@ Rules:
     required String castDescription,
     required String castIdsCsv,
     required int sceneCount,
-    required int previousScenes,
+    required List<StoryScene> previousScenes,
   }) {
     return '''
 Visual-novel lesson — part $part of $totalParts.
@@ -358,7 +361,7 @@ Level guidance: $levelHint
 
 $castDescription
 
-Already shown: $previousScenes scene${previousScenes == 1 ? '' : 's'}.
+${_previousScenesSummary(previousScenes)}
 
 Output ONLY this JSON shape (no other keys, no wrapper):
 {
@@ -372,7 +375,26 @@ Rules:
 - characterId MUST be one of $castIdsCsv. No new ids.
 - Dialogue ≤25 words. Each scene introduces ONE idea via a real-world analogy first.
 - Use plain, friendly English. Avoid jargon.
+- Do NOT repeat any dialogue or narration verbatim from earlier scenes.
+  Each line should advance the lesson with new wording and a new sub-idea.
 ''';
+  }
+
+  // Summarises prior scenes for the next prompt so the model doesn't
+  // regurgitate earlier dialogue. Truncates each line so we don't blow
+  // the context window on long stories.
+  String _previousScenesSummary(List<StoryScene> scenes) {
+    if (scenes.isEmpty) return 'This is the opening — no prior scenes.';
+    final buf = StringBuffer(
+        'Already shown (${scenes.length} scene${scenes.length == 1 ? '' : 's'} — DO NOT repeat these lines):\n');
+    for (var i = 0; i < scenes.length; i++) {
+      final s = scenes[i];
+      final line = s.dialogue.length > 90
+          ? '${s.dialogue.substring(0, 90)}…'
+          : s.dialogue;
+      buf.writeln('${i + 1}. ${s.characterId}: "$line"');
+    }
+    return buf.toString();
   }
 
   /// Run a Gemma call; if the response can't be parsed, retry once with a
