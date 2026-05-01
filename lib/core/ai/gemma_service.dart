@@ -4,19 +4,19 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:path_provider/path_provider.dart';
 
-/// Wraps flutter_gemma for on-device Gemma 4 E4B inference.
+/// Wraps flutter_gemma for on-device Gemma 4 E2B inference.
 ///
-/// Model: litert-community/gemma-4-E4B-it-litert-lm (~3.65 GB, downloaded once)
+/// Model: litert-community/gemma-4-E2B-it-litert-lm (~2.58 GB, downloaded once)
 /// GPU-accelerated on Android via LiteRT-LM runtime.
 class GemmaService {
   GemmaService._();
   static final GemmaService instance = GemmaService._();
 
   static const _modelUrl =
-      'https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm'
-      '/resolve/main/gemma-4-E4B-it.litertlm';
+      'https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm'
+      '/resolve/main/gemma-4-E2B-it.litertlm';
 
-  static const _modelId = 'gemma-4-E4B-it.litertlm';
+  static const _modelId = 'gemma-4-E2B-it.litertlm';
 
   static const _hfToken =
       String.fromEnvironment('HF_TOKEN', defaultValue: '');
