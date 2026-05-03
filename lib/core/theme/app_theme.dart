@@ -169,7 +169,18 @@ class AppTheme {
     FontWeight fontWeight = FontWeight.w700,
     Color color = textPrimary,
     double letterSpacing = 1.2,
+    bool dyslexic = false,
   }) {
+    if (dyslexic) {
+      // Atkinson Hyperlegible — designed by the Braille Institute for low-vision
+      // and dyslexic readers. Swapped in when the profile a11y flag is on.
+      return GoogleFonts.atkinsonHyperlegible(
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+        color: color,
+        letterSpacing: letterSpacing,
+      );
+    }
     return GoogleFonts.orbitron(
       fontSize: fontSize,
       fontWeight: fontWeight,
@@ -184,7 +195,17 @@ class AppTheme {
     Color color = textPrimary,
     double? height,
     double? letterSpacing,
+    bool dyslexic = false,
   }) {
+    if (dyslexic) {
+      return GoogleFonts.atkinsonHyperlegible(
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+        color: color,
+        height: height ?? 1.6, // slightly looser for dyslexic readers
+        letterSpacing: letterSpacing ?? 0.3,
+      );
+    }
     return GoogleFonts.spaceGrotesk(
       fontSize: fontSize,
       fontWeight: fontWeight,
