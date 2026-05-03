@@ -40,6 +40,7 @@ class _StoryLearnScreenState extends State<StoryLearnScreen> {
   String _topic = '';
   String _difficulty = 'beginner';
   Franchise? _franchise;
+  String _mood = '';
 
   // Sub-topic phase state
   List<Map<String, dynamic>> _subtopics = const [];
@@ -89,7 +90,7 @@ class _StoryLearnScreenState extends State<StoryLearnScreen> {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => const FranchisePickerSheet(),
+      builder: (_) => FranchisePickerSheet(suggestedMood: _mood),
     );
     if (selected == null) return;
     setState(() => _franchise = selected);
@@ -161,6 +162,7 @@ class _StoryLearnScreenState extends State<StoryLearnScreen> {
         topic: _effectiveTopic,
         difficulty: _difficulty,
         franchise: _franchise,
+        mood: _mood,
       )) {
         if (!mounted) return;
         switch (chunk.kind) {
@@ -535,6 +537,13 @@ class _StoryLearnScreenState extends State<StoryLearnScreen> {
 
   // ── Phase: franchise ─────────────────────────────────────────────────────
   Widget _buildFranchise() {
+    const moods = [
+      ('calm', '🧘', 'Calm'),
+      ('hyped', '⚡', 'Hyped'),
+      ('curious', '🔍', 'Curious'),
+      ('anxious', '😰', 'Anxious'),
+      ('sad', '💙', 'Low'),
+    ];
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
       children: [
@@ -555,6 +564,60 @@ class _StoryLearnScreenState extends State<StoryLearnScreen> {
             color: AppTheme.textSecondary,
             height: 1.5,
           ),
+        ),
+        const SizedBox(height: 18),
+        Text(
+          "Mood today? (optional — tunes which franchises get suggested)",
+          style: GoogleFonts.spaceGrotesk(
+            fontSize: 11,
+            color: AppTheme.textTertiary,
+            letterSpacing: 0.3,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final m in moods)
+              GestureDetector(
+                onTap: () =>
+                    setState(() => _mood = _mood == m.$1 ? '' : m.$1),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: _mood == m.$1
+                        ? AppTheme.accentCyan.withAlpha(40)
+                        : Colors.white.withAlpha(10),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: _mood == m.$1
+                          ? AppTheme.accentCyan
+                          : Colors.white24,
+                      width: _mood == m.$1 ? 1.2 : 0.7,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(m.$2, style: const TextStyle(fontSize: 14)),
+                      const SizedBox(width: 6),
+                      Text(
+                        m.$3,
+                        style: GoogleFonts.spaceGrotesk(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: _mood == m.$1
+                              ? AppTheme.accentCyan
+                              : Colors.white70,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
         ),
         const SizedBox(height: 24),
         ElevatedButton.icon(

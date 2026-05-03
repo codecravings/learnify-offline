@@ -9,7 +9,11 @@ import '../data/franchise_loader.dart';
 /// Returns the selected `Franchise` via `Navigator.pop(context, franchise)`.
 /// Pop with `null` to cancel.
 class FranchisePickerSheet extends StatefulWidget {
-  const FranchisePickerSheet({super.key});
+  const FranchisePickerSheet({super.key, this.suggestedMood = ''});
+
+  /// Optional mood (calm|hyped|curious|anxious|sad). If non-empty, the picker
+  /// surfaces a "Best for your mood" section above the full list.
+  final String suggestedMood;
 
   @override
   State<FranchisePickerSheet> createState() => _FranchisePickerSheetState();
@@ -20,6 +24,7 @@ class _FranchisePickerSheetState extends State<FranchisePickerSheet> {
   String _query = '';
   List<Franchise> _all = const [];
   bool _loading = true;
+  List<Franchise> _moodMatches = const [];
 
   @override
   void initState() {
@@ -32,8 +37,58 @@ class _FranchisePickerSheetState extends State<FranchisePickerSheet> {
     if (!mounted) return;
     setState(() {
       _all = list;
+      _moodMatches = _rankByMood(list, widget.suggestedMood);
       _loading = false;
     });
+  }
+
+  // Mood → tone keywords. Score each franchise as max-keyword-hits across its
+  // characters' emotional/speech/humor styles. Cheap heuristic, no model call.
+  static const _moodKeywords = <String, List<String>>{
+    'calm': [
+      'measured', 'thoughtful', 'quiet', 'patient', 'serene', 'gentle',
+      'composed', 'steady', 'reflective', 'soft-spoken', 'wise'
+    ],
+    'hyped': [
+      'energetic', 'loud', 'enthusiastic', 'high-energy', 'bombastic',
+      'fiery', 'passionate', 'exuberant', 'punchy', 'wild', 'over the top'
+    ],
+    'curious': [
+      'inquisitive', 'curious', 'exploratory', 'questioning', 'wondering',
+      'analytical', 'observant', 'investigative', 'open-minded'
+    ],
+    'anxious': [
+      'reassuring', 'patient', 'gentle', 'soft', 'kind', 'warm',
+      'calm', 'understanding', 'protective', 'supportive'
+    ],
+    'sad': [
+      'warm', 'kind', 'gentle', 'uplifting', 'supportive', 'compassionate',
+      'tender', 'empathetic', 'hopeful', 'caring'
+    ],
+  };
+
+  List<Franchise> _rankByMood(List<Franchise> list, String mood) {
+    if (mood.isEmpty) return const [];
+    final keywords = _moodKeywords[mood];
+    if (keywords == null || keywords.isEmpty) return const [];
+    final scored = <(Franchise, int)>[];
+    for (final f in list) {
+      var best = 0;
+      for (final c in f.characters) {
+        final blob = (c.emotionalStyle + ' ' + c.speechStyle +
+                ' ' + c.humorStyle + ' ' + c.teachingStyle +
+                ' ' + c.traits.join(' '))
+            .toLowerCase();
+        var score = 0;
+        for (final kw in keywords) {
+          if (blob.contains(kw)) score++;
+        }
+        if (score > best) best = score;
+      }
+      if (best > 0) scored.add((f, best));
+    }
+    scored.sort((a, b) => b.$2.compareTo(a.$2));
+    return scored.take(3).map((e) => e.$1).toList();
   }
 
   List<Franchise> get _filtered {
@@ -92,6 +147,121 @@ class _FranchisePickerSheetState extends State<FranchisePickerSheet> {
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  Widget _buildList() {
+    final showMoodHeader = _query.isEmpty &&
+        widget.suggestedMood.isNotEmpty &&
+        _moodMatches.isNotEmpty;
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+      children: [
+        if (showMoodHeader) ...[
+          Row(
+            children: [
+              Icon(Icons.psychology_alt_rounded,
+                  color: AppTheme.accentPurple, size: 14),
+              const SizedBox(width: 6),
+              Text(
+                'BEST FOR YOUR MOOD',
+                style: GoogleFonts.orbitron(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.accentPurple,
+                  letterSpacing: 1.4,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          for (final f in _moodMatches) ...[
+            _franchiseRow(f, highlighted: true),
+            const SizedBox(height: 8),
+          ],
+          const SizedBox(height: 8),
+          Text(
+            'ALL FRANCHISES',
+            style: GoogleFonts.orbitron(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: Colors.white54,
+              letterSpacing: 1.4,
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+        for (final f in _filtered) ...[
+          _franchiseRow(f, highlighted: false),
+          const SizedBox(height: 8),
+        ],
+      ],
+    );
+  }
+
+  Widget _franchiseRow(Franchise f, {required bool highlighted}) {
+    final color = _categoryColor(f.category);
+    final accent = highlighted ? AppTheme.accentPurple : color;
+    return InkWell(
+      onTap: () => Navigator.of(context).pop(f),
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          color: accent.withAlpha(highlighted ? 28 : 14),
+          border: Border.all(
+              color: accent.withAlpha(highlighted ? 120 : 60),
+              width: highlighted ? 1.2 : 0.7),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(5),
+                color: color.withAlpha(40),
+              ),
+              child: Text(
+                _categoryLabel(f.category),
+                style: GoogleFonts.orbitron(
+                  fontSize: 8,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                  letterSpacing: 1,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                f.name,
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            if (highlighted)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Icon(Icons.auto_awesome_rounded,
+                    color: AppTheme.accentPurple, size: 14),
+              ),
+            Text(
+              '${f.characters.length} chars',
+              style: const TextStyle(
+                fontSize: 11,
+                color: Colors.white38,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -176,67 +346,7 @@ class _FranchisePickerSheetState extends State<FranchisePickerSheet> {
                           style: const TextStyle(color: Colors.white38),
                         ),
                       )
-                    : ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-                        itemCount: _filtered.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
-                        itemBuilder: (_, i) {
-                          final f = _filtered[i];
-                          final color = _categoryColor(f.category);
-                          return InkWell(
-                            onTap: () => Navigator.of(context).pop(f),
-                            borderRadius: BorderRadius.circular(14),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 12),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(14),
-                                color: color.withAlpha(14),
-                                border: Border.all(color: color.withAlpha(60)),
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 7, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(5),
-                                      color: color.withAlpha(40),
-                                    ),
-                                    child: Text(
-                                      _categoryLabel(f.category),
-                                      style: GoogleFonts.orbitron(
-                                        fontSize: 8,
-                                        fontWeight: FontWeight.w700,
-                                        color: color,
-                                        letterSpacing: 1,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      f.name,
-                                      style: GoogleFonts.spaceGrotesk(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ),
-                                  Text(
-                                    '${f.characters.length} chars',
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.white38,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
+                    : _buildList(),
           ),
         ],
       ),

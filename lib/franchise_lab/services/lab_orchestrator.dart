@@ -148,6 +148,7 @@ EXAMPLE for topic "Fractions" at beginner level, count=5:
     required String topic,
     required String difficulty,
     required Franchise? franchise,
+    String mood = '',
   }) async* {
     final memCtx = await _memory.getStudyContext(topic);
     await _memory.retainTopicInterest(topic, level: difficulty);
@@ -167,7 +168,7 @@ EXAMPLE for topic "Fractions" at beginner level, count=5:
     final castIdsCsv = castIds.map((id) => '"$id"').join(', ');
     final castDescription = _castDescriptionForPrompt(franchise, cast);
 
-    final systemPrompt = _buildSystemPrompt(franchise, memCtx);
+    final systemPrompt = _buildSystemPrompt(franchise, memCtx, mood: mood);
     final levelHint = _levelHint(difficulty);
     final title = _topicTitle(topic, difficulty);
 
@@ -615,7 +616,11 @@ ${history.isEmpty ? '(empty — they have not studied anything yet)' : history}
 
   // ── PROMPT BUILDERS ────────────────────────────────────────────────────────
 
-  String _buildSystemPrompt(Franchise? franchise, String memoryContext) {
+  String _buildSystemPrompt(
+    Franchise? franchise,
+    String memoryContext, {
+    String mood = '',
+  }) {
     final personaBlock = franchise == null
         ? _genericStoryBlock()
         : _franchisePersonaBlock(franchise);
@@ -627,6 +632,8 @@ ${history.isEmpty ? '(empty — they have not studied anything yet)' : history}
 $memoryContext
 ''';
 
+    final moodBlock = _moodToneBlock(mood);
+
     final allowedNames = franchise == null
         ? '"Mentor", "Apprentice", "Skeptic", "Cheerleader" (or similar generic personas)'
         : franchise.characters.map((c) => '"${c.name}"').join(', ');
@@ -637,6 +644,7 @@ You produce short visual-novel scenes where 2-4 characters teach the topic throu
 
 $personaBlock
 $memBlock
+$moodBlock
 
 ## Story Rules
 - Each scene = one character speaking. Build on prior scenes.
@@ -660,6 +668,28 @@ $memBlock
 ALWAYS return ONLY valid JSON, no markdown fences, no outer wrapper key like
 "story_lesson" — start with { and end with }. Output ONLY the keys the user
 prompt asks for in this turn.
+''';
+  }
+
+  String _moodToneBlock(String mood) {
+    if (mood.isEmpty) return '';
+    final tone = switch (mood) {
+      'calm' =>
+        'Student is calm and focused — measured, thoughtful pacing. Take time to explain.',
+      'hyped' =>
+        'Student is hyped — punchy sentences, exclamations, fast pacing, fun analogies.',
+      'curious' =>
+        'Student is curious — lean into surprising connections and "what if" tangents.',
+      'anxious' =>
+        'Student feels anxious — be reassuring, slow down, tiny steps, no scary jargon.',
+      'sad' =>
+        'Student feels low — be warm, kind, gently encouraging. Celebrate small wins.',
+      _ => '',
+    };
+    if (tone.isEmpty) return '';
+    return '''
+## Today's Mood
+$tone Adapt your voice — but never mention the mood explicitly.
 ''';
   }
 
