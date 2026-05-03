@@ -64,6 +64,54 @@ class LabOrchestrator {
   final _gemma = GemmaService.instance;
   final _memory = LabMemoryService.instance;
 
+  // ── COMIC PANELS (deterministic, no extra Gemma call) ─────────────────────
+
+  /// Pick 4 dialogue beats from the completed story and pack them as comic
+  /// panels. We pick the 1st, 2 mid-point scenes, and the last — covers the
+  /// arc. Uses character colors from the StoryResponse + emotion as accent.
+  ///
+  /// Returns a JSON-encoded payload ready for `lab_comics.panels_json`.
+  Map<String, dynamic> buildComicPayload({
+    required String topic,
+    required StoryResponse story,
+    Franchise? franchise,
+  }) {
+    final scenes = story.scenes;
+    if (scenes.isEmpty) {
+      return {'title': story.title, 'panels': const []};
+    }
+    final picks = _pickFourScenes(scenes);
+    final charById = {
+      for (final c in story.franchiseCharacters) c.id: c,
+    };
+
+    final panels = picks.map((scene) {
+      final c = charById[scene.characterId];
+      return {
+        'characterId': scene.characterId,
+        'characterName': c?.name ?? scene.characterId,
+        'characterColor': c?.colorHex ?? '#00F5FF',
+        'emotion': scene.emotion,
+        'dialogue': scene.dialogue,
+        'narration': scene.narration,
+      };
+    }).toList();
+
+    return {
+      'title': story.title,
+      'topic': topic,
+      'franchiseName': franchise?.name,
+      'panels': panels,
+    };
+  }
+
+  List<StoryScene> _pickFourScenes(List<StoryScene> all) {
+    if (all.length <= 4) return List<StoryScene>.from(all);
+    final mid1 = (all.length / 3).floor();
+    final mid2 = (all.length * 2 / 3).floor();
+    return [all.first, all[mid1], all[mid2], all.last];
+  }
+
   // ── SUB-TOPICS ─────────────────────────────────────────────────────────────
 
   /// Break a topic into a list of sub-topics so the user can pick which

@@ -247,6 +247,45 @@ class LabMemoryService {
     return _db.getMemoryEvents(pid, limit: limit);
   }
 
+  // ── COMICS ───────────────────────────────────────────────────────────────────
+
+  Future<int?> saveComic({
+    required String topic,
+    required String title,
+    required String panelsJson,
+    String? franchiseId,
+    String? franchiseName,
+  }) async {
+    final pid = _pid;
+    if (pid == null) return null;
+    return _db.insertComic(pid, {
+      'topic': topic,
+      'title': title,
+      'panels_json': panelsJson,
+      'franchise_id': franchiseId,
+      'franchise_name': franchiseName,
+      'created_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> getComics({int limit = 50}) async {
+    final pid = _pid;
+    if (pid == null) return [];
+    return _db.getComics(pid, limit: limit);
+  }
+
+  Future<Map<String, dynamic>?> getComic(int id) async {
+    final pid = _pid;
+    if (pid == null) return null;
+    return _db.getComic(pid, id);
+  }
+
+  Future<void> deleteComic(int id) async {
+    final pid = _pid;
+    if (pid == null) return;
+    await _db.deleteComic(pid, id);
+  }
+
   // ── HELPERS ──────────────────────────────────────────────────────────────────
 
   Future<int> _getQuizCount(int pid, String topic) async {
