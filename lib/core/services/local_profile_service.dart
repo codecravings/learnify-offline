@@ -14,6 +14,8 @@ class LocalProfile {
     this.xp = 0,
     this.streak = 0,
     this.interests = const [],
+    this.currentMood,
+    this.lastMoodDate,
   });
 
   final int id;
@@ -24,6 +26,8 @@ class LocalProfile {
   int xp;
   int streak;
   List<String> interests;
+  String? currentMood;
+  DateTime? lastMoodDate;
 
   factory LocalProfile.fromMap(Map<String, dynamic> m) => LocalProfile(
         id: m['id'] as int,
@@ -35,6 +39,10 @@ class LocalProfile {
         streak: m['streak'] as int? ?? 0,
         interests: List<String>.from(
             jsonDecode(m['interests'] as String? ?? '[]') as List),
+        currentMood: m['current_mood'] as String?,
+        lastMoodDate: m['last_mood_date'] is String
+            ? DateTime.tryParse(m['last_mood_date'] as String)
+            : null,
       );
 
   Map<String, dynamic> toMap() => {
@@ -46,7 +54,18 @@ class LocalProfile {
         'xp': xp,
         'streak': streak,
         'interests': jsonEncode(interests),
+        'current_mood': currentMood,
+        'last_mood_date': lastMoodDate?.toIso8601String(),
       };
+
+  bool get needsMoodCheckIn {
+    final last = lastMoodDate;
+    if (last == null) return true;
+    final now = DateTime.now();
+    return last.year != now.year ||
+        last.month != now.month ||
+        last.day != now.day;
+  }
 }
 
 /// Local profile manager — replaces Firebase Auth.
@@ -120,6 +139,19 @@ class LocalProfileService extends ChangeNotifier {
     if (p == null) return;
     p.streak = streak;
     await _db.updateProfile(p.id, {'streak': streak});
+    notifyListeners();
+  }
+
+  Future<void> setMood(String mood) async {
+    final p = _current;
+    if (p == null) return;
+    final now = DateTime.now();
+    p.currentMood = mood;
+    p.lastMoodDate = now;
+    await _db.updateProfile(p.id, {
+      'current_mood': mood,
+      'last_mood_date': now.toIso8601String(),
+    });
     notifyListeners();
   }
 

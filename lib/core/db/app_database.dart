@@ -19,7 +19,7 @@ class AppDatabase {
     final dbPath = await getDatabasesPath();
     return openDatabase(
       join(dbPath, 'learnify.db'),
-      version: 2,
+      version: 3,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -27,6 +27,12 @@ class AppDatabase {
 
   Future<void> _onUpgrade(Database db, int oldV, int newV) async {
     if (oldV < 2) await _createTopicPaths(db);
+    if (oldV < 3) await _addMoodColumns(db);
+  }
+
+  Future<void> _addMoodColumns(Database db) async {
+    await db.execute("ALTER TABLE profiles ADD COLUMN current_mood TEXT");
+    await db.execute("ALTER TABLE profiles ADD COLUMN last_mood_date TEXT");
   }
 
   Future<void> _createTopicPaths(Database db) async {
@@ -59,7 +65,9 @@ class AppDatabase {
         xp INTEGER DEFAULT 0,
         streak INTEGER DEFAULT 0,
         last_active TEXT,
-        interests TEXT DEFAULT '[]'
+        interests TEXT DEFAULT '[]',
+        current_mood TEXT,
+        last_mood_date TEXT
       )
     ''');
 
