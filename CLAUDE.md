@@ -8,10 +8,10 @@ This repo was previously a cloud-AI + Firebase app (DeepSeek/Groq/Hindsight, Fir
 
 - **AI:** All inference runs locally via `flutter_gemma` (LiteRT-LM) using `gemma-4-E2B-it.litertlm` (~2.58 GB). No DeepSeek, no Groq, no Hindsight, no Gemini API.
 - **Storage:** SQLite (`sqflite`) via `lib/core/db/app_database.dart`. No Firestore, no Firebase Auth, no Cloud Functions.
-- **Profiles:** Local-only via `LocalProfileService` — name/grade/language, multiple profiles supported (student + teacher demo mode). No login, no password.
+- **Profiles:** Local-only via `LocalProfileService` — name/grade/language, multiple profiles supported. No login, no password.
 - **Memory:** `LocalMemoryService` replaces Hindsight — same "retrieve past events → inject into prompt" pattern, but reads from SQLite.
 
-Stale artifacts still present but not wired in: `functions/`, `firebase.json`, `firestore.rules`, `storage.rules`, `firestore.indexes.json`, unused models (`battle_model.dart`, `challenge_model.dart`, `forum_post_model.dart`, `learning_path_model.dart`, `user_model.dart`, `achievement_model.dart`). Treat these as dead weight — don't extend them.
+The legacy Firebase Functions tree (`functions/`) is still on disk but not wired in. Treat as dead weight — don't extend it.
 
 ## Build & Run
 
@@ -53,7 +53,7 @@ E2B is the only supported model. The earlier E4B variant + variant-switching API
 
 - `minSdk = 31` (hard requirement for LiteRT-LM)
 - `androidResources.noCompress += ["tflite", "litertlm", "task", "bin"]` — model files must be stored uncompressed for mmap
-- `applicationId = "com.vidyasetu.vidyasetu"` (reflects the old name — don't change; the sideload path is derived from this)
+- `applicationId = "com.vidyasetu.vidyasetu"` — don't rename; the documented sideload path depends on this exact value
 - Java 17
 
 ### Analyzer config
@@ -75,11 +75,10 @@ lib/
 │   ├── constants/    # AppConstants
 │   ├── config/       # (legacy API key loader — unused)
 │   └── utils/
-├── features/         # setup/, auth/, story_learning/, companion/, scan/, teacher/,
+├── features/         # setup/, auth/, story_learning/, companion/, scan/,
 │                     # courses/, profile/, achievements/, skill_tree/, knowledge_graph/, search/
 ├── franchise_lab/    # Parallel experimental subapp — own main.dart, isolated DB,
 │                     # franchise-persona Story Learn + Companion + Profile (see below)
-├── models/           # Mostly legacy; story models live under features/story_learning/models/
 ├── routes/app_router.dart
 └── main.dart         # FlutterGemma.initialize → LocalProfileService.initialize → runApp
 ```
@@ -87,7 +86,7 @@ lib/
 ### Three-layer AI stack
 
 1. **`GemmaService`** (`core/ai/gemma_service.dart`) — Singleton wrapper over `flutter_gemma`. Owns model lifecycle (download, sideload, install, warm). Exposes `generate`, `generateStream`, `generateFromImage`, `createCompanionChat` (returns a persistent `InferenceChat` for multi-turn).
-2. **`GemmaOrchestrator`** (`core/ai/gemma_orchestrator.dart`) — Singleton. Seven agents (Story, Tutor, Quiz, Explorer, Planner, LearnerTwin, Teacher + Image Analysis + intent Orchestrator) share one Gemma instance; identity is the system prompt. The orchestrator pulls memory context from `LocalMemoryService`, injects it into `AgentPrompts.*`, calls `GemmaService`, then parses JSON with a tolerant extractor (`_parseJsonAny`) that strips markdown fences and finds the first balanced `{...}` / `[...]`. Gemma frequently prefixes output with prose — don't skip this step.
+2. **`GemmaOrchestrator`** (`core/ai/gemma_orchestrator.dart`) — Singleton. Six agents (Story, Tutor, Quiz, Explorer, Planner, LearnerTwin + Image Analysis + intent Orchestrator) share one Gemma instance; identity is the system prompt. The orchestrator pulls memory context from `LocalMemoryService`, injects it into `AgentPrompts.*`, calls `GemmaService`, then parses JSON with a tolerant extractor (`_parseJsonAny`) that strips markdown fences and finds the first balanced `{...}` / `[...]`. Gemma frequently prefixes output with prose — don't skip this step.
 3. **`AgentPrompts`** (`core/ai/agent_prompts.dart`) — Pure system prompt templates. Every prompt enforces `Language: {language}` and "Return ONLY valid JSON — no markdown fences". Style block (`desi_meme`, `practical`, `movie_tv`, `exam`, `beginner`) is composed into the Story prompt.
 
 When adding a new feature that calls AI: add a method to `GemmaOrchestrator`, add a template to `AgentPrompts`, keep `GemmaService` untouched.
@@ -122,7 +121,7 @@ Setup flow: `/setup` (model download or sideload import) → `/setup/profile` �
 
 Home is a `ShellRoute` with 3-tab bottom nav: `/home`, `/home/companion`, `/home/profile`.
 
-Other standalone routes: `/lesson`, `/topic-explorer`, `/topics`, `/concept-map`, `/skill-tree`, `/search`, `/achievements`, `/courses`, `/coding-arena`, `/scan`, `/teacher`, `/profile`. Route data is passed via `state.extra as Map<String, dynamic>?` — there is no type-safe route param system.
+Other standalone routes: `/lesson`, `/topic-explorer`, `/topics`, `/concept-map`, `/skill-tree`, `/search`, `/achievements`, `/courses`, `/scan`, `/profile`. Route data is passed via `state.extra as Map<String, dynamic>?` — there is no type-safe route param system.
 
 ### Story Learning — 6-phase flow (`features/story_learning/screens/story_screen.dart`, ~1300 lines)
 
@@ -142,10 +141,6 @@ When modifying StoryScreen: work by `_Phase` enum — do not restructure phases.
 ### Study Companion (`features/companion/screens/study_companion_screen.dart`)
 
 Uses `GemmaOrchestrator.getStudyPulse` for the auto-generated top card, `queryLearnerTwinStream` for the chat (streaming tokens). Every exchange is persisted via `LocalMemoryService.retainChatExchange`.
-
-### Teacher Copilot (`features/teacher/screens/teacher_copilot_screen.dart`)
-
-Aggregates all local profiles (all students on the device) → passes to `GemmaOrchestrator.teacherQuery` with a class-data block.
 
 ## Franchise Lab (parallel subapp)
 

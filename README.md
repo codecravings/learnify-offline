@@ -29,13 +29,13 @@ That means they **fail exactly where learning matters most**:
 ### Learnify changes that.
 
 Once installed, it works **forever offline**.
-Your teacher, tutor, planner, storyteller, and study companion live **inside your phone** ❤️📱
+Your tutor, planner, storyteller, and study companion live **inside your phone** ❤️📱
 
 ---
 
 # 🌟 What Makes Learnify Special?
 
-## 🤖 7 AI Agents, One Brain
+## 🤖 6 AI Agents, One Brain
 
 Powered by a single Gemma model with specialized roles:
 
@@ -45,7 +45,6 @@ Powered by a single Gemma model with specialized roles:
 📅 Planner Agent
 🔍 Explorer Agent
 👤 Learner Twin Agent
-👩‍🏫 Teacher Copilot Agent
 📷 Image Analysis Agent
 
 All coordinated through one smart orchestrator.
@@ -93,18 +92,6 @@ Ask:
 😵 Where am I weakest?
 📈 How am I improving?
 🔥 Motivate me today
-
----
-
-## 👩‍🏫 Teacher Copilot
-
-A classroom superpower.
-
-📊 See class progress
-📄 Generate worksheets
-📚 Create lesson plans
-🚨 Identify struggling students
-⚡ All from local student devices
 
 ---
 
@@ -186,7 +173,6 @@ lib/
 │   ├── story_learning/
 │   ├── scan/
 │   ├── companion/
-│   ├── teacher/
 │   ├── profile/
 │   ├── skill_tree/
 │   └── knowledge_graph/
@@ -197,7 +183,7 @@ lib/
 
 # 🧠 Multi-Agent Design
 
-One Gemma instance. Seven personalities. Infinite possibilities.
+One Gemma instance. Six personalities. Infinite possibilities.
 
 ```text
 User → Orchestrator
@@ -206,8 +192,7 @@ User → Orchestrator
    ├── Quiz Agent
    ├── Planner Agent
    ├── Explorer Agent
-   ├── Learner Twin
-   └── Teacher Copilot
+   └── Learner Twin
 ```
 
 ⚡ Shared weights in RAM
