@@ -17,7 +17,6 @@ import '../features/skill_tree/screens/skill_tree_screen.dart';
 import '../features/search/screens/search_screen.dart';
 import '../features/achievements/screens/achievements_screen.dart';
 import '../features/courses/screens/courses_screen.dart';
-import '../features/courses/screens/coding_arena_screen.dart';
 import '../features/scan/screens/scan_textbook_screen.dart';
 import '../features/teacher/screens/teacher_copilot_screen.dart';
 
@@ -33,7 +32,6 @@ abstract class AppRoutes {
   static const String search = '/search';
   static const String achievements = '/achievements';
   static const String courses = '/courses';
-  static const String codingArena = '/coding-arena';
   static const String scan = '/scan';
   static const String teacher = '/teacher';
   static const String userProfile = '/profile';
@@ -146,10 +144,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.courses,
         builder: (_, __) => const CoursesScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.codingArena,
-        builder: (_, __) => const CodingArenaScreen(),
       ),
       GoRoute(
         path: AppRoutes.scan,
