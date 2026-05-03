@@ -25,6 +25,8 @@ class LocalMemoryService {
     required int total,
     List<String> missedQuestions = const [],
     List<String> concepts = const [],
+    String? pathTopicKey,
+    int? pathStepIndex,
   }) async {
     final pid = _pid;
     if (pid == null) return;
@@ -88,6 +90,30 @@ class LocalMemoryService {
     // Update XP
     final xpGain = 35 + (accuracy >= 100 ? 15 : 0);
     await _profile.addXP(xpGain);
+
+    // If this quiz was launched from a Mastery Path step, mark it complete on pass.
+    if (pathTopicKey != null && pathStepIndex != null && accuracy >= 70) {
+      final row = await _db.getTopicPath(pid, pathTopicKey);
+      if (row != null) {
+        final completed =
+            AppDatabase.decodeList(row['completed_step_indices'] as String?)
+                .map((e) => (e as num).toInt())
+                .toSet()
+              ..add(pathStepIndex);
+        final steps = AppDatabase.decodeList(row['steps_json'] as String);
+        var next = pathStepIndex + 1;
+        while (next < steps.length && completed.contains(next)) {
+          next++;
+        }
+        if (next >= steps.length) next = steps.length - 1;
+        await _db.updateTopicPathProgress(
+          pid,
+          pathTopicKey,
+          currentStepIndex: next,
+          completedStepIndices: completed.toList()..sort(),
+        );
+      }
+    }
   }
 
   Future<void> retainTopicInterest(String topic, {String level = 'basics'}) async {
@@ -210,6 +236,87 @@ class LocalMemoryService {
       }
     }
     return out;
+  }
+
+  // ── MASTERY PATHS ────────────────────────────────────────────────────────────
+
+  Future<Map<String, dynamic>?> getMasteryPath(String topic) async {
+    final pid = _pid;
+    if (pid == null) return null;
+    final row = await _db.getTopicPath(pid, _sanitizeKey(topic));
+    if (row == null) return null;
+    return _decodePath(row);
+  }
+
+  Future<List<Map<String, dynamic>>> getActiveMasteryPaths() async {
+    final pid = _pid;
+    if (pid == null) return [];
+    final rows = await _db.getAllTopicPaths(pid);
+    return rows.map(_decodePath).toList();
+  }
+
+  Future<void> saveMasteryPath({
+    required String topic,
+    required List<Map<String, dynamic>> steps,
+    int estimatedMinutes = 0,
+  }) async {
+    final pid = _pid;
+    if (pid == null) return;
+    final now = DateTime.now().toIso8601String();
+    await _db.upsertTopicPath(pid, {
+      'topic_key': _sanitizeKey(topic),
+      'topic_name': topic,
+      'steps_json': AppDatabase.encodeList(steps),
+      'current_step_index': 0,
+      'completed_step_indices': '[]',
+      'estimated_minutes': estimatedMinutes,
+      'created_at': now,
+      'updated_at': now,
+    });
+  }
+
+  /// Mark a step done. Auto-advances current_step_index to the next unfinished step.
+  Future<void> markStepComplete(String topic, int stepIndex) async {
+    final pid = _pid;
+    if (pid == null) return;
+    final row = await _db.getTopicPath(pid, _sanitizeKey(topic));
+    if (row == null) return;
+
+    final completed = AppDatabase.decodeList(row['completed_step_indices'] as String?)
+        .map((e) => (e as num).toInt())
+        .toSet()
+      ..add(stepIndex);
+
+    final steps = AppDatabase.decodeList(row['steps_json'] as String);
+    final totalSteps = steps.length;
+    var next = stepIndex + 1;
+    while (next < totalSteps && completed.contains(next)) {
+      next++;
+    }
+    if (next >= totalSteps) next = totalSteps - 1;
+
+    await _db.updateTopicPathProgress(
+      pid,
+      _sanitizeKey(topic),
+      currentStepIndex: next,
+      completedStepIndices: completed.toList()..sort(),
+    );
+  }
+
+  Map<String, dynamic> _decodePath(Map<String, dynamic> row) {
+    final steps = AppDatabase.decodeList(row['steps_json'] as String?)
+        .cast<Map<String, dynamic>>();
+    final completed = AppDatabase.decodeList(row['completed_step_indices'] as String?)
+        .map((e) => (e as num).toInt())
+        .toList();
+    return {
+      'topic': row['topic_name'],
+      'topicKey': row['topic_key'],
+      'steps': steps,
+      'currentStepIndex': row['current_step_index'] as int? ?? 0,
+      'completedStepIndices': completed,
+      'estimatedMinutes': row['estimated_minutes'] as int? ?? 0,
+    };
   }
 
   /// Last N chat exchanges with this agent, formatted as a short transcript.
