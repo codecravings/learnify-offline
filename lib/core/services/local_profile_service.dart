@@ -16,6 +16,8 @@ class LocalProfile {
     this.interests = const [],
     this.currentMood,
     this.lastMoodDate,
+    this.dyslexicMode = false,
+    this.ttsEnabled = false,
   });
 
   final int id;
@@ -28,6 +30,8 @@ class LocalProfile {
   List<String> interests;
   String? currentMood;
   DateTime? lastMoodDate;
+  bool dyslexicMode;
+  bool ttsEnabled;
 
   factory LocalProfile.fromMap(Map<String, dynamic> m) => LocalProfile(
         id: m['id'] as int,
@@ -43,6 +47,8 @@ class LocalProfile {
         lastMoodDate: m['last_mood_date'] is String
             ? DateTime.tryParse(m['last_mood_date'] as String)
             : null,
+        dyslexicMode: (m['dyslexic_mode'] as int? ?? 0) == 1,
+        ttsEnabled: (m['tts_enabled'] as int? ?? 0) == 1,
       );
 
   Map<String, dynamic> toMap() => {
@@ -56,6 +62,8 @@ class LocalProfile {
         'interests': jsonEncode(interests),
         'current_mood': currentMood,
         'last_mood_date': lastMoodDate?.toIso8601String(),
+        'dyslexic_mode': dyslexicMode ? 1 : 0,
+        'tts_enabled': ttsEnabled ? 1 : 0,
       };
 
   bool get needsMoodCheckIn {
@@ -139,6 +147,22 @@ class LocalProfileService extends ChangeNotifier {
     if (p == null) return;
     p.streak = streak;
     await _db.updateProfile(p.id, {'streak': streak});
+    notifyListeners();
+  }
+
+  Future<void> setDyslexicMode(bool enabled) async {
+    final p = _current;
+    if (p == null) return;
+    p.dyslexicMode = enabled;
+    await _db.updateProfile(p.id, {'dyslexic_mode': enabled ? 1 : 0});
+    notifyListeners();
+  }
+
+  Future<void> setTtsEnabled(bool enabled) async {
+    final p = _current;
+    if (p == null) return;
+    p.ttsEnabled = enabled;
+    await _db.updateProfile(p.id, {'tts_enabled': enabled ? 1 : 0});
     notifyListeners();
   }
 
