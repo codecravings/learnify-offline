@@ -309,6 +309,13 @@ class _HomeDashboardState extends State<HomeDashboard>
                     .animate()
                     .fadeIn(duration: 500.ms)
                     .slideX(begin: -0.05, duration: 500.ms),
+                if (_profile.currentProfile?.needsMoodCheckIn ?? false) ...[
+                  const SizedBox(height: 16),
+                  _buildMoodCheckInCard()
+                      .animate()
+                      .fadeIn(delay: 30.ms, duration: 500.ms)
+                      .slideY(begin: 0.04, duration: 500.ms),
+                ],
                 const SizedBox(height: 20),
                 _buildHeroLearnCard()
                     .animate()
@@ -443,6 +450,94 @@ class _HomeDashboardState extends State<HomeDashboard>
           ],
         ),
       );
+
+  // ── Mood check-in card (daily, dismissable) ────────────────────────────────
+
+  static const _moods = <_MoodOption>[
+    _MoodOption('calm', '🧘', 'Calm', AppTheme.accentCyan),
+    _MoodOption('hyped', '⚡', 'Hyped', AppTheme.accentGold),
+    _MoodOption('curious', '🔍', 'Curious', AppTheme.accentPurple),
+    _MoodOption('anxious', '😰', 'Anxious', AppTheme.accentOrange),
+    _MoodOption('sad', '💙', 'Low', AppTheme.accentGreen),
+  ];
+
+  Future<void> _setMood(String mood) async {
+    await _profile.setMood(mood);
+    if (mounted) setState(() {});
+  }
+
+  Widget _buildMoodCheckInCard() {
+    return GlassContainer(
+      borderColor: AppTheme.accentPurple.withAlpha(80),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.psychology_alt_rounded,
+                  color: AppTheme.accentPurple, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                'HOW ARE YOU FEELING?',
+                style: GoogleFonts.orbitron(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.accentPurple,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "Tell me your mood — I'll match the lesson tone today.",
+            style: GoogleFonts.spaceGrotesk(
+              fontSize: 12,
+              color: AppTheme.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              for (final m in _moods) ...[
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => _setMood(m.id),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: m.color.withAlpha(22),
+                        borderRadius: BorderRadius.circular(10),
+                        border:
+                            Border.all(color: m.color.withAlpha(80), width: 0.7),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(m.emoji, style: const TextStyle(fontSize: 22)),
+                          const SizedBox(height: 4),
+                          Text(
+                            m.label,
+                            style: GoogleFonts.orbitron(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: m.color,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                if (m != _moods.last) const SizedBox(width: 6),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   // ── Hero card: Learn Anything ──────────────────────────────────────────────
 
@@ -1353,4 +1448,12 @@ class _StylePickerSheetState extends State<_StylePickerSheet> {
       ),
     );
   }
+}
+
+class _MoodOption {
+  const _MoodOption(this.id, this.emoji, this.label, this.color);
+  final String id;
+  final String emoji;
+  final String label;
+  final Color color;
 }
