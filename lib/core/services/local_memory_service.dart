@@ -193,6 +193,44 @@ class LocalMemoryService {
     }).toList();
   }
 
+  /// Past missed questions + low-accuracy concepts for a topic — fed into
+  /// the Quiz / Story prompt so generated questions target real weak spots.
+  Future<List<String>> getWeakAreas(String topic, {int limit = 5}) async {
+    final pid = _pid;
+    if (pid == null) return [];
+    final results = await _db.getQuizResults(pid, topic: topic, limit: 10);
+    final seen = <String>{};
+    final out = <String>[];
+    for (final r in results) {
+      final missed = AppDatabase.decodeList(r['missed_questions'] as String?);
+      for (final m in missed) {
+        if (m.trim().isEmpty) continue;
+        if (seen.add(m)) out.add(m);
+        if (out.length >= limit) return out;
+      }
+    }
+    return out;
+  }
+
+  /// Last N chat exchanges with this agent, formatted as a short transcript.
+  /// Injected into Learner-Twin prompts so the Companion remembers prior turns
+  /// across sessions instead of starting cold every time.
+  Future<String> getRecentChatContext({String agent = 'companion', int limit = 8}) async {
+    final pid = _pid;
+    if (pid == null) return '';
+    final rows = await _db.getChatHistory(pid, agent: agent, limit: limit);
+    if (rows.isEmpty) return '';
+    final buf = StringBuffer('## Recent Conversation (oldest first)\n');
+    for (final r in rows) {
+      final q = (r['query'] as String?)?.trim() ?? '';
+      final a = (r['response'] as String?)?.trim() ?? '';
+      if (q.isEmpty && a.isEmpty) continue;
+      if (q.isNotEmpty) buf.writeln('Student: $q');
+      if (a.isNotEmpty) buf.writeln('You: $a');
+    }
+    return buf.toString();
+  }
+
   // ── HELPERS ──────────────────────────────────────────────────────────────────
 
   String _sanitizeKey(String topic) =>
