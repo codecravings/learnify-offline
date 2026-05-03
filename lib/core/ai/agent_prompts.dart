@@ -10,6 +10,7 @@ abstract class AgentPrompts {
     required String franchiseName,
     required String memoryContext,
     required String language,
+    String mood = '',
   }) {
     final styleBlock = _styleBlock(style, franchiseName);
     final memBlock = memoryContext.isNotEmpty
@@ -19,6 +20,7 @@ $memoryContext
 Adapt the lesson: spend more time on past weak areas, briefly recap mastered concepts, target quiz questions at previous mistakes.
 '''
         : '';
+    final moodBlock = _moodBlock(mood);
 
     return '''
 You are the Story Agent in Learnify's multi-agent AI system — a creative educational storyteller.
@@ -36,6 +38,7 @@ For franchise mode, use ACTUAL characters from "$franchiseName" with authentic d
 - 3 quiz questions, 4 options each (correctIndex is 0-based).
 $styleBlock
 $memBlock
+$moodBlock
 
 ## Output — return ONLY valid JSON, no markdown fences:
 {
@@ -249,8 +252,10 @@ Create a 7-day study plan. Return ONLY valid JSON:
     required String learningHistory,
     required String query,
     String chatContext = '',
-  }) =>
-      '''
+    String mood = '',
+  }) {
+    final moodBlock = _moodBlock(mood);
+    return '''
 You are the Learner Twin Agent in Learnify's multi-agent AI system.
 You maintain a deep model of this specific learner — their strengths, weaknesses,
 learning patterns, and optimal next steps. You have access to their full history.
@@ -259,11 +264,14 @@ Language: $language. Respond ONLY in $language.
 ## Student Learning History
 $learningHistory
 ${chatContext.isNotEmpty ? '\n$chatContext\nContinue this conversation naturally — do not repeat earlier answers verbatim, build on them.\n' : ''}
+$moodBlock
+
 Answer this query about the student's learning: $query
 
 Be specific, reference actual topics and scores from their history.
 Keep response under 150 words unless a detailed plan is requested.
 ''';
+  }
 
   // ── MASTERY AGENT (structured topic decomposition) ──────────────────────────
 
@@ -345,6 +353,31 @@ Return ONLY valid JSON:
 ''';
 
   // ── HELPERS ──────────────────────────────────────────────────────────────────
+
+  /// Tone-shift block injected by mood-aware agents.
+  /// Empty string when no mood is set — keeps prompts unchanged for cold start.
+  static String _moodBlock(String mood) {
+    if (mood.isEmpty) return '';
+    final tone = switch (mood) {
+      'calm' =>
+        'The student feels calm and focused. Use a measured, thoughtful tone. Take time with explanations.',
+      'hyped' =>
+        'The student is energized. Match that energy — use punchy sentences, exclamations, fast pacing, fun analogies.',
+      'anxious' =>
+        'The student feels anxious or stressed. Be reassuring, slow down, break ideas into very small steps. Avoid intimidating jargon.',
+      'sad' =>
+        'The student feels low today. Be warm, kind, and gently encouraging. Celebrate small wins. Keep things light.',
+      'curious' =>
+        'The student is curious and exploratory. Lean into "what if" questions, surprising connections, and rabbit-hole asides.',
+      _ => '',
+    };
+    if (tone.isEmpty) return '';
+    return '''
+## Today's Mood: $mood
+$tone
+Adapt your voice — but never mention the mood explicitly to the student.
+''';
+  }
 
   static String _styleBlock(String style, String franchiseName) {
     switch (style) {

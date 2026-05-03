@@ -22,6 +22,7 @@ class GemmaOrchestrator {
   final _profile = LocalProfileService.instance;
 
   String get _lang => _profile.currentProfile?.language ?? 'English';
+  String get _mood => _profile.currentProfile?.currentMood ?? '';
 
   // ── STORY AGENT ─────────────────────────────────────────────────────────────
 
@@ -39,6 +40,7 @@ class GemmaOrchestrator {
       franchiseName: franchiseName,
       memoryContext: memCtx,
       language: _lang,
+      mood: _mood,
     );
 
     Future<String> run(String userPrompt) => _gemma.generate(
@@ -106,6 +108,7 @@ class GemmaOrchestrator {
       franchiseName: franchiseName,
       memoryContext: memCtx,
       language: _lang,
+      mood: _mood,
     );
 
     final userPrompt = '''
@@ -392,6 +395,7 @@ Make the lesson engaging and cover all concepts thoroughly.
         learningHistory: history,
         chatContext: chat,
         query: query,
+        mood: _mood,
       ),
       userPrompt: query,
     );
@@ -406,6 +410,7 @@ Make the lesson engaging and cover all concepts thoroughly.
         learningHistory: history,
         chatContext: chat,
         query: query,
+        mood: _mood,
       ),
       userPrompt: query,
     );
