@@ -405,22 +405,6 @@ Make the lesson engaging and cover all concepts thoroughly.
     );
   }
 
-  // ── TEACHER AGENT ─────────────────────────────────────────────────────────
-
-  Future<String> teacherQuery({
-    required String request,
-    List<Map<String, dynamic>> classData = const [],
-  }) async {
-    return _gemma.generate(
-      systemPrompt: AgentPrompts.teacher(
-        language: _lang,
-        classData: classData,
-        request: request,
-      ),
-      userPrompt: request,
-    );
-  }
-
   // ── ORCHESTRATOR (intent routing) ─────────────────────────────────────────
 
   Future<Map<String, dynamic>> classifyIntent(String userInput) async {

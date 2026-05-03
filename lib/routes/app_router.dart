@@ -18,7 +18,6 @@ import '../features/search/screens/search_screen.dart';
 import '../features/achievements/screens/achievements_screen.dart';
 import '../features/courses/screens/courses_screen.dart';
 import '../features/scan/screens/scan_textbook_screen.dart';
-import '../features/teacher/screens/teacher_copilot_screen.dart';
 
 abstract class AppRoutes {
   static const String setup = '/setup';
@@ -33,7 +32,6 @@ abstract class AppRoutes {
   static const String achievements = '/achievements';
   static const String courses = '/courses';
   static const String scan = '/scan';
-  static const String teacher = '/teacher';
   static const String userProfile = '/profile';
 }
 
@@ -148,10 +146,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.scan,
         builder: (_, __) => const ScanTextbookScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.teacher,
-        builder: (_, __) => const TeacherCopilotScreen(),
       ),
       GoRoute(
         path: AppRoutes.userProfile,

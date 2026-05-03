@@ -333,10 +333,6 @@ class _HomeDashboardState extends State<HomeDashboard>
                 _buildUtilityRow()
                     .animate()
                     .fadeIn(delay: 420.ms, duration: 600.ms),
-                const SizedBox(height: 18),
-                _buildTeacherCopilotCard()
-                    .animate()
-                    .fadeIn(delay: 480.ms, duration: 600.ms),
               ],
             ),
           ),
@@ -1118,66 +1114,6 @@ class _HomeDashboardState extends State<HomeDashboard>
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  // ── Teacher Copilot entry ──────────────────────────────────────────────────
-
-  Widget _buildTeacherCopilotCard() {
-    return GestureDetector(
-      onTap: () => context.push('/teacher'),
-      child: GlassContainer(
-        borderColor: AppTheme.accentGold.withAlpha(50),
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                gradient: LinearGradient(
-                  colors: [
-                    AppTheme.accentGold.withAlpha(60),
-                    AppTheme.accentOrange.withAlpha(40),
-                  ],
-                ),
-                border:
-                    Border.all(color: AppTheme.accentGold.withAlpha(80)),
-              ),
-              child: const Icon(Icons.school_rounded,
-                  color: AppTheme.accentGold, size: 22),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'TEACHER COPILOT',
-                    style: GoogleFonts.orbitron(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.accentGold,
-                      letterSpacing: 2,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    'Generate quizzes, worksheets & lesson plans',
-                    style: GoogleFonts.spaceGrotesk(
-                      fontSize: 11,
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.arrow_forward_ios_rounded,
-                color: AppTheme.accentGold.withAlpha(120), size: 14),
-          ],
-        ),
       ),
     );
   }

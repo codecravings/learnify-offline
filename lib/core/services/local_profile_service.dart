@@ -52,7 +52,7 @@ class LocalProfile {
 /// Local profile manager — replaces Firebase Auth.
 ///
 /// No login, no password. Students create a named local profile on first launch.
-/// Supports multiple profiles on one device (student + teacher demo mode).
+/// Supports multiple profiles on one device.
 class LocalProfileService extends ChangeNotifier {
   LocalProfileService._();
   static final LocalProfileService instance = LocalProfileService._();

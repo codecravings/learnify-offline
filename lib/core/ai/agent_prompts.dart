@@ -264,33 +264,6 @@ Be specific, reference actual topics and scores from their history.
 Keep response under 150 words unless a detailed plan is requested.
 ''';
 
-  // ── TEACHER COPILOT AGENT ───────────────────────────────────────────────────
-
-  static String teacher({
-    required String language,
-    required List<Map<String, dynamic>> classData,
-    required String request,
-  }) {
-    final classBlock = classData
-        .map((s) =>
-            '- ${s['name']}: topics=${s['topicCount']}, avgAccuracy=${s['avgAccuracy']}%, streak=${s['streak']}d')
-        .join('\n');
-
-    return '''
-You are the Teacher Copilot Agent in Learnify's multi-agent AI system.
-You help educators understand student progress and generate teaching resources.
-Language: $language. Respond ONLY in $language.
-
-## Class Data
-$classBlock
-
-Teacher request: $request
-
-Provide actionable insights. If generating a lesson plan or worksheet, format it clearly.
-Return as plain text (not JSON) unless a structured format is requested.
-''';
-  }
-
   // ── ORCHESTRATOR ─────────────────────────────────────────────────────────────
 
   static String orchestrator() => '''
@@ -299,7 +272,7 @@ Classify the user's intent and route to the correct agent.
 
 Return ONLY valid JSON — no markdown, no explanation:
 {
-  "agent": "story|tutor|quiz|planner|learnerTwin|teacher",
+  "agent": "story|tutor|quiz|planner|learnerTwin",
   "topic": "extracted topic or empty string",
   "intent": "one-line description of what the user wants"
 }
