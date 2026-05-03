@@ -247,6 +247,36 @@ class LabMemoryService {
     return _db.getMemoryEvents(pid, limit: limit);
   }
 
+  /// Last N companion chat exchanges, oldest-first, formatted for prompt
+  /// injection. Mirrors LocalMemoryService.getRecentChatContext so the Lab
+  /// Companion compounds across sessions instead of starting cold.
+  Future<String> getRecentChatContext({int limit = 8}) async {
+    final pid = _pid;
+    if (pid == null) return '';
+    final rows = await _db.getMemoryEvents(
+      pid,
+      type: 'chat',
+      limit: limit,
+      ascending: true,
+    );
+    if (rows.isEmpty) return '';
+    final buf = StringBuffer('## Recent Conversation (oldest first)\n');
+    for (final r in rows) {
+      final content = (r['content'] as String?)?.trim() ?? '';
+      if (content.isEmpty) continue;
+      // Stored shape from retainChatExchange: "Q: ...\nA: ..."
+      final lines = content.split('\n');
+      for (final line in lines) {
+        if (line.startsWith('Q:')) {
+          buf.writeln('Student: ${line.substring(2).trim()}');
+        } else if (line.startsWith('A:')) {
+          buf.writeln('You: ${line.substring(2).trim()}');
+        }
+      }
+    }
+    return buf.toString();
+  }
+
   // ── COMICS ───────────────────────────────────────────────────────────────────
 
   Future<int?> saveComic({

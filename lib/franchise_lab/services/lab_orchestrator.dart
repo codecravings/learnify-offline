@@ -645,6 +645,7 @@ Rules:
   /// `LabMemoryService.retainChatExchange` once the stream completes.
   Stream<String> companionStream(String query) async* {
     final history = await _memory.getFormattedHistory();
+    final chatContext = await _memory.getRecentChatContext();
     final systemPrompt = '''
 You are the Learner Twin Companion in Franchise Lab — a warm, on-device study buddy.
 You answer questions about what the learner has studied, what they're weak in, what
@@ -654,6 +655,7 @@ ask for a plan.
 
 ## Learner History
 ${history.isEmpty ? '(empty — they have not studied anything yet)' : history}
+${chatContext.isNotEmpty ? '\n$chatContext\nContinue this conversation naturally — do not repeat earlier answers verbatim, build on them.\n' : ''}
 ''';
 
     yield* _gemma.generateStream(
