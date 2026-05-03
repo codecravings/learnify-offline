@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
@@ -7,6 +8,7 @@ import '../../../core/services/local_profile_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../core/widgets/glass_container.dart';
+import '../../../routes/app_router.dart';
 
 /// Local-first profile screen. No Firebase, no leagues, no battles.
 class ProfileScreen extends StatefulWidget {
@@ -23,12 +25,13 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   late final TabController _tabs;
   List<Map<String, dynamic>> _topics = [];
+  List<Map<String, dynamic>> _paths = [];
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
+    _tabs = TabController(length: 3, vsync: this);
     _profile.addListener(_onProfileChanged);
     _load();
   }
@@ -46,9 +49,11 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   Future<void> _load() async {
     final topics = await _memory.getAllTopicProgress();
+    final paths = await _memory.getActiveMasteryPaths();
     if (mounted) {
       setState(() {
         _topics = topics;
+        _paths = paths;
         _loading = false;
       });
     }
@@ -86,9 +91,11 @@ class _ProfileScreenState extends State<ProfileScreen>
               const SizedBox(height: 10),
               AnimatedBuilder(
                 animation: _tabs,
-                builder: (_, __) => _tabs.index == 0
-                    ? _buildOverviewTab(p)
-                    : _buildAchievementsTab(p),
+                builder: (_, __) => switch (_tabs.index) {
+                  0 => _buildOverviewTab(p),
+                  1 => _buildPathsTab(),
+                  _ => _buildAchievementsTab(p),
+                },
               ),
             ],
           ),
@@ -258,7 +265,8 @@ class _ProfileScreenState extends State<ProfileScreen>
         ),
         tabs: const [
           Tab(text: 'OVERVIEW'),
-          Tab(text: 'ACHIEVEMENTS'),
+          Tab(text: 'PATHS'),
+          Tab(text: 'AWARDS'),
         ],
       ),
     );
@@ -416,6 +424,115 @@ class _ProfileScreenState extends State<ProfileScreen>
                 ),
               ))
           .toList(),
+    );
+  }
+
+  Widget _buildPathsTab() {
+    if (_loading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 60),
+        child: Center(
+            child: CircularProgressIndicator(color: AppTheme.accentCyan)),
+      );
+    }
+    if (_paths.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 40),
+        child: GlassContainer(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              const Icon(Icons.route_rounded,
+                  color: AppTheme.accentCyan, size: 36),
+              const SizedBox(height: 12),
+              Text('NO MASTERY PATHS YET',
+                  style: GoogleFonts.orbitron(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textSecondary,
+                      letterSpacing: 1.5)),
+              const SizedBox(height: 6),
+              Text(
+                'Pick a topic and tap "Build mastery path" to break it into structured steps.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.spaceGrotesk(
+                    fontSize: 12, color: AppTheme.textTertiary),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: _paths.map((p) {
+        final steps = (p['steps'] as List).cast<Map<String, dynamic>>();
+        final completed = (p['completedStepIndices'] as List).length;
+        final total = steps.length;
+        final ratio = total == 0 ? 0.0 : completed / total;
+        final topic = p['topic'] as String;
+        final current = (p['currentStepIndex'] as int).clamp(0, total - 1);
+        final currentTitle = steps.isNotEmpty
+            ? (steps[current]['title'] as String? ?? '')
+            : '';
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: GestureDetector(
+            onTap: () => context.push(
+              AppRoutes.masteryPath,
+              extra: {'topic': topic},
+            ),
+            child: GlassContainer(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(topic,
+                            style: GoogleFonts.orbitron(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                                letterSpacing: 0.5)),
+                      ),
+                      Text('$completed/$total',
+                          style: GoogleFonts.orbitron(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.accentCyan)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: ratio,
+                      minHeight: 6,
+                      backgroundColor: Colors.white.withAlpha(15),
+                      valueColor: const AlwaysStoppedAnimation(
+                          AppTheme.accentCyan),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    completed == total
+                        ? 'Path complete'
+                        : 'Next: $currentTitle',
+                    style: GoogleFonts.spaceGrotesk(
+                        fontSize: 12,
+                        color: completed == total
+                            ? AppTheme.accentGreen
+                            : AppTheme.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 
