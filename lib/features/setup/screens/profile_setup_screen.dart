@@ -17,6 +17,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   String _language = 'English';
   String _grade = 'Student';
   bool _loading = false;
+  bool _dyslexic = false;
 
   static const _languages = [
     'English', 'Hindi', 'Spanish', 'French', 'Arabic',
@@ -43,6 +44,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         language: _language,
         grade: _grade,
       );
+      if (_dyslexic) {
+        await LocalProfileService.instance.setDyslexicMode(true);
+      }
       if (mounted) context.go('/home');
     } catch (e) {
       if (mounted) {
@@ -99,6 +103,29 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 value: _grade,
                 items: _grades,
                 onChanged: (v) => setState(() => _grade = v!),
+              ),
+              const SizedBox(height: 28),
+              _label('Accessibility'),
+              const SizedBox(height: 8),
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.white.withAlpha(15),
+                  border: Border.all(color: Colors.white12),
+                ),
+                child: SwitchListTile.adaptive(
+                  value: _dyslexic,
+                  onChanged: (v) => setState(() => _dyslexic = v),
+                  activeColor: AppTheme.accentCyan,
+                  title: const Text(
+                    'Dyslexia-friendly mode',
+                    style: TextStyle(color: Colors.white, fontSize: 14),
+                  ),
+                  subtitle: const Text(
+                    'Atkinson Hyperlegible font + bionic reading + simpler sentences',
+                    style: TextStyle(color: Colors.white54, fontSize: 11),
+                  ),
+                ),
               ),
               const SizedBox(height: 48),
               SizedBox(

@@ -792,8 +792,53 @@ class _SettingsSheetState extends State<_SettingsSheet> {
               Navigator.of(context).pop();
             },
           ),
+          _toggleRow(
+            Icons.accessibility_new_rounded,
+            'Dyslexia-friendly mode',
+            AppTheme.accentCyan,
+            widget.profile.dyslexicMode,
+            (v) => LocalProfileService.instance.setDyslexicMode(v),
+          ),
+          _toggleRow(
+            Icons.volume_up_rounded,
+            'Read aloud (TTS)',
+            AppTheme.accentPurple,
+            widget.profile.ttsEnabled,
+            (v) => LocalProfileService.instance.setTtsEnabled(v),
+          ),
           _row(Icons.info_outline_rounded, 'About', AppTheme.accentGreen,
               _openAbout),
+        ],
+      ),
+    );
+  }
+
+  Widget _toggleRow(IconData icon, String label, Color color, bool value,
+      Future<void> Function(bool) onChanged) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              label,
+              style: GoogleFonts.spaceGrotesk(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+          ),
+          Switch.adaptive(
+            value: value,
+            activeColor: color,
+            onChanged: (v) async {
+              await onChanged(v);
+              if (mounted) setState(() {});
+            },
+          ),
         ],
       ),
     );

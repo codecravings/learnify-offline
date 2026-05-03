@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' show pi;
 
 import 'package:flutter/material.dart';
@@ -8,8 +9,11 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../../core/ai/gemma_orchestrator.dart';
 import '../../../core/services/local_memory_service.dart';
 import '../../../core/services/local_profile_service.dart';
+import '../../../core/services/text_to_speech_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/bionic_text.dart';
 import '../../../core/widgets/glass_container.dart';
+import '../../../core/widgets/karaoke_text.dart';
 import '../../../core/widgets/neon_button.dart';
 import '../../../core/widgets/particle_background.dart';
 import '../../courses/data/course_data.dart';
@@ -62,6 +66,9 @@ class _StoryScreenState extends State<StoryScreen> {
 
   StoryResponse? _story;
   int _sceneIndex = 0;
+  int _ttsActiveWord = -1;
+  String? _ttsActiveDialogue;
+  StreamSubscription<int>? _ttsSub;
   int _questionIndex = 0;
   int _correctCount = 0;
   final List<String> _missedQuestions = [];
@@ -78,6 +85,143 @@ class _StoryScreenState extends State<StoryScreen> {
     super.initState();
     _initContext();
   }
+
+  @override
+  void dispose() {
+    _ttsSub?.cancel();
+    TextToSpeechService.instance.stop();
+    super.dispose();
+  }
+
+  Widget _buildDialogue(String dialogue) {
+    final dyslexic = _profile.currentProfile?.dyslexicMode ?? false;
+    final baseStyle = AppTheme.bodyStyle(
+      fontSize: 15,
+      color: AppTheme.textPrimary,
+      height: 1.5,
+      dyslexic: dyslexic,
+    );
+    final isActiveScene = _ttsActiveDialogue == dialogue && _ttsActiveWord >= 0;
+    if (isActiveScene) {
+      return KaraokeText(
+        text: dialogue,
+        style: baseStyle,
+        activeWordIndex: _ttsActiveWord,
+      );
+    }
+    if (dyslexic) {
+      return BionicText(text: dialogue, style: baseStyle);
+    }
+    return Text(dialogue, style: baseStyle);
+  }
+
+  Widget _buildSpeakButton(String dialogue) {
+    final isActive = _ttsActiveDialogue == dialogue;
+    return GestureDetector(
+      onTap: () => _toggleSpeak(dialogue),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: isActive
+              ? AppTheme.accentCyan.withAlpha(40)
+              : Colors.white.withAlpha(15),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isActive ? AppTheme.accentCyan : Colors.white24,
+            width: 0.7,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isActive ? Icons.stop_rounded : Icons.volume_up_rounded,
+              size: 14,
+              color: isActive ? AppTheme.accentCyan : Colors.white70,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              isActive ? 'Stop' : 'Read aloud',
+              style: GoogleFonts.spaceGrotesk(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: isActive ? AppTheme.accentCyan : Colors.white70,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _toggleSpeak(String dialogue) async {
+    final tts = TextToSpeechService.instance;
+    if (_ttsActiveDialogue == dialogue && tts.isSpeaking) {
+      await tts.stop();
+      if (mounted) {
+        setState(() {
+          _ttsActiveDialogue = null;
+          _ttsActiveWord = -1;
+        });
+      }
+      return;
+    }
+    setState(() {
+      _ttsActiveDialogue = dialogue;
+      _ttsActiveWord = -1;
+    });
+    _ttsSub ??= tts.wordIndexStream.listen((idx) {
+      if (!mounted) return;
+      setState(() => _ttsActiveWord = idx);
+      if (idx < 0) {
+        setState(() => _ttsActiveDialogue = null);
+      }
+    });
+    final lang = _profile.currentProfile?.language ?? 'English';
+    final result = await tts.speak(dialogue, language: _languageToBcp47(lang));
+    if (!mounted) return;
+    if (result.isError) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppTheme.accentMagenta,
+          duration: const Duration(seconds: 3),
+          content: Text(
+            result.message ??
+                'TTS not available. Install a text-to-speech language pack from Settings.',
+            style: const TextStyle(color: Colors.white),
+          ),
+        ),
+      );
+      setState(() {
+        _ttsActiveDialogue = null;
+        _ttsActiveWord = -1;
+      });
+    } else if (result.status == TtsStatus.fallbackToDefault) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppTheme.accentGold,
+          duration: const Duration(seconds: 2),
+          content: Text(
+            result.message ?? 'Reading in device default voice',
+            style: const TextStyle(color: Colors.black),
+          ),
+        ),
+      );
+    }
+  }
+
+  String _languageToBcp47(String human) => switch (human) {
+        'Hindi' => 'hi-IN',
+        'Spanish' => 'es-ES',
+        'French' => 'fr-FR',
+        'Arabic' => 'ar-SA',
+        'Portuguese' => 'pt-BR',
+        'Bengali' => 'bn-IN',
+        'Mandarin' => 'zh-CN',
+        'Swahili' => 'sw-KE',
+        'Urdu' => 'ur-PK',
+        _ => 'en-US',
+      };
 
   void _initContext() {
     // Resolve topic + lesson context
@@ -798,14 +942,11 @@ class _StoryScreenState extends State<StoryScreen> {
                               ),
                               const SizedBox(height: 8),
                             ],
-                            Text(
-                              scene.dialogue,
-                              style: GoogleFonts.spaceGrotesk(
-                                fontSize: 15,
-                                color: AppTheme.textPrimary,
-                                height: 1.5,
-                              ),
-                            ),
+                            _buildDialogue(scene.dialogue),
+                            if (_profile.currentProfile?.ttsEnabled ?? false) ...[
+                              const SizedBox(height: 8),
+                              _buildSpeakButton(scene.dialogue),
+                            ],
                             if (scene.conceptTag != null) ...[
                               const SizedBox(height: 10),
                               Container(
