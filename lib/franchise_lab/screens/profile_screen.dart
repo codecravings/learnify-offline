@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_theme.dart';
 import '../services/lab_memory_service.dart';
 import '../services/lab_profile_service.dart';
+import 'comic_album_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -19,6 +20,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   List<Map<String, dynamic>> _topics = const [];
   List<Map<String, dynamic>> _favorites = const [];
   List<Map<String, dynamic>> _recent = const [];
+  int _comicCount = 0;
   bool _loading = true;
 
   @override
@@ -42,13 +44,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final t = await _memory.getAllTopicProgress();
     final f = await _memory.getTopFranchises(limit: 3);
     final r = await _memory.getRecentEvents(limit: 10);
+    final c = await _memory.getComics();
     if (!mounted) return;
     setState(() {
       _topics = t;
       _favorites = f;
       _recent = r;
+      _comicCount = c.length;
       _loading = false;
     });
+  }
+
+  void _openAlbum() {
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const ComicAlbumScreen()))
+        .then((_) => _load());
   }
 
   @override
@@ -67,7 +77,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               _buildHeader(p),
               const SizedBox(height: 20),
               _statRow(p),
-              const SizedBox(height: 28),
+              const SizedBox(height: 16),
+              _comicAlbumEntry(),
+              const SizedBox(height: 12),
               _sectionLabel('TOPICS MASTERED'),
               const SizedBox(height: 10),
               _topicsList(mastered: true),
@@ -177,6 +189,69 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   color: color,
                   letterSpacing: 1.2,
                 )),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _comicAlbumEntry() {
+    return GestureDetector(
+      onTap: _openAlbum,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              AppTheme.accentMagenta.withAlpha(40),
+              AppTheme.accentCyan.withAlpha(28),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppTheme.accentMagenta.withAlpha(80)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppTheme.accentMagenta.withAlpha(50),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.collections_bookmark_rounded,
+                  color: AppTheme.accentMagenta, size: 22),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'COMIC ALBUM',
+                    style: GoogleFonts.orbitron(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.accentMagenta,
+                      letterSpacing: 1.6,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _comicCount == 0
+                        ? 'Save lessons as 4-panel manga to remember them'
+                        : '$_comicCount comic${_comicCount == 1 ? '' : 's'} saved',
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 12,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios_rounded,
+                color: Colors.white54, size: 14),
           ],
         ),
       ),

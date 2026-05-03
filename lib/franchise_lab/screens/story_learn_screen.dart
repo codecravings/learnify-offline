@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/theme/app_theme.dart';
@@ -57,6 +60,7 @@ class _StoryLearnScreenState extends State<StoryLearnScreen> {
   // Streaming state — set true while we're still waiting for parts.
   bool _moreScenesPending = false;
   bool _quizPending = false;
+  bool _comicSaved = false;
 
   String? _error;
 
@@ -348,6 +352,7 @@ class _StoryLearnScreenState extends State<StoryLearnScreen> {
       _showExplain = false;
       _missed.clear();
       _phase = _Phase.topic;
+      _comicSaved = false;
       _error = null;
     });
   }
@@ -1093,6 +1098,39 @@ class _StoryLearnScreenState extends State<StoryLearnScreen> {
               ],
             ),
             const SizedBox(height: 28),
+            if (_story != null && _story!.scenes.isNotEmpty)
+              OutlinedButton.icon(
+                onPressed: _comicSaved ? null : _saveComic,
+                icon: Icon(
+                  _comicSaved
+                      ? Icons.check_circle_rounded
+                      : Icons.collections_bookmark_rounded,
+                  size: 18,
+                ),
+                label: Text(
+                  _comicSaved ? 'SAVED TO ALBUM' : 'SAVE AS COMIC',
+                  style: GoogleFonts.orbitron(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                    letterSpacing: 1.4,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor:
+                      _comicSaved ? AppTheme.accentGreen : AppTheme.accentCyan,
+                  side: BorderSide(
+                    color: _comicSaved
+                        ? AppTheme.accentGreen
+                        : AppTheme.accentCyan,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 22, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            const SizedBox(height: 12),
             ElevatedButton(
               onPressed: _restart,
               style: ElevatedButton.styleFrom(
@@ -1115,6 +1153,40 @@ class _StoryLearnScreenState extends State<StoryLearnScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _saveComic() async {
+    final story = _story;
+    if (story == null) return;
+    final payload = _orchestrator.buildComicPayload(
+      topic: _topic,
+      story: story,
+      franchise: _franchise,
+    );
+    final id = await _memory.saveComic(
+      topic: _topic,
+      title: payload['title'] as String? ?? _topic,
+      panelsJson: jsonEncode(payload),
+      franchiseId: _franchise?.id,
+      franchiseName: _franchise?.name,
+    );
+    if (!mounted) return;
+    if (id != null) {
+      setState(() => _comicSaved = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 2),
+          backgroundColor: AppTheme.accentGreen,
+          content: Text(
+            'Comic saved to your album.',
+            style: GoogleFonts.spaceGrotesk(
+              color: Colors.black,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      );
+    }
   }
 
   Widget _statChip(String label, Color color) => Container(
