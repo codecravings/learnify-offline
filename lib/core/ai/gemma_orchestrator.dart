@@ -411,6 +411,32 @@ Make the lesson engaging and cover all concepts thoroughly.
     );
   }
 
+  // ── MASTERY AGENT (structured topic decomposition) ──────────────────────
+
+  Future<Map<String, dynamic>> decomposeMasteryPath({
+    required String topic,
+    String level = 'basics',
+  }) async {
+    final history = await _memory.getAllTopicProgress();
+    final pastConcepts = history
+        .where((t) => (t['accuracy'] as int) >= 70)
+        .map((t) => t['name'] as String)
+        .take(10)
+        .join(', ');
+
+    final raw = await _gemma.generate(
+      systemPrompt: AgentPrompts.mastery(
+        topic: topic,
+        level: level,
+        pastConcepts: pastConcepts.isEmpty ? 'none yet' : pastConcepts,
+        language: _lang,
+      ),
+      userPrompt: 'Decompose "$topic" into a mastery path.',
+      maxTokens: 1500,
+    );
+    return _parseJson(raw);
+  }
+
   // ── ORCHESTRATOR (intent routing) ─────────────────────────────────────────
 
   Future<Map<String, dynamic>> classifyIntent(String userInput) async {
