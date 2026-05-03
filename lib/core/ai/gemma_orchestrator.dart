@@ -152,12 +152,14 @@ Make the lesson engaging and cover all concepts thoroughly.
     required String level,
     List<String> weakAreas = const [],
   }) async {
+    final effectiveWeakAreas =
+        weakAreas.isNotEmpty ? weakAreas : await _memory.getWeakAreas(topic);
     final raw = await _gemma.generate(
       systemPrompt: AgentPrompts.quiz(
         topic: topic,
         level: level,
         language: _lang,
-        weakAreas: weakAreas,
+        weakAreas: effectiveWeakAreas,
       ),
       userPrompt: 'Generate 5 quiz questions for topic: $topic at $level level.',
     );
