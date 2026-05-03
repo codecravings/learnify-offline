@@ -11,6 +11,7 @@ import '../data/franchise_loader.dart';
 import '../services/lab_memory_service.dart';
 import '../services/lab_orchestrator.dart';
 import '../widgets/franchise_picker.dart';
+import 'feynman_mode_screen.dart';
 
 /// Story Learning flow:
 ///   topic → difficulty → franchise → loading → story → quiz → results
@@ -1098,6 +1099,43 @@ class _StoryLearnScreenState extends State<StoryLearnScreen> {
               ],
             ),
             const SizedBox(height: 28),
+            if (_feynmanUnlocked(accuracy: accuracy)) ...[
+              ElevatedButton.icon(
+                onPressed: _openFeynmanMode,
+                icon: const Icon(Icons.psychology_rounded, size: 18),
+                label: Text(
+                  'TEACH ${_franchise!.characters.first.name.toUpperCase()}',
+                  style: GoogleFonts.orbitron(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                    letterSpacing: 1.4,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.accentPurple,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 22, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              )
+                  .animate()
+                  .fadeIn(delay: 300.ms, duration: 500.ms)
+                  .scale(begin: const Offset(0.92, 0.92), curve: Curves.easeOut),
+              const SizedBox(height: 6),
+              Text(
+                'Role reversal — explain it back to them.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 11,
+                  color: AppTheme.textTertiary,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             if (_story != null && _story!.scenes.isNotEmpty)
               OutlinedButton.icon(
                 onPressed: _comicSaved ? null : _saveComic,
@@ -1150,6 +1188,30 @@ class _StoryLearnScreenState extends State<StoryLearnScreen> {
                   )),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  bool _feynmanUnlocked({required int accuracy}) {
+    if (accuracy < 70) return false;
+    if (_difficulty == 'beginner') return false;
+    final f = _franchise;
+    if (f == null) return false;
+    if (f.characters.isEmpty) return false;
+    if (_story == null) return false;
+    return true;
+  }
+
+  void _openFeynmanMode() {
+    final f = _franchise;
+    if (f == null || f.characters.isEmpty) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => FeynmanModeScreen(
+          topic: _topic,
+          franchise: f,
+          character: f.characters.first,
         ),
       ),
     );

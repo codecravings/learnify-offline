@@ -13,6 +13,9 @@ import 'lab_memory_service.dart';
 /// from the trailing quiz block.
 enum LabStoryChunkKind { intro, moreScenes, quiz }
 
+/// Which turn of a Feynman / role-reversal session is being generated.
+enum FeynmanTurn { opening, followUp, lightbulb }
+
 class LabStoryChunk {
   const LabStoryChunk._({
     required this.kind,
@@ -637,6 +640,107 @@ Rules:
       closer.write(open == '{' ? '}' : ']');
     }
     return closer.toString();
+  }
+
+  // ── FEYNMAN MODE (role reversal — kid teaches the character) ──────────────
+
+  /// Which "turn" of the Feynman session we're generating.
+  /// - opening:    character admits confusion + asks an opening question
+  /// - followUp:   character reacts to kid's reply, asks a follow-up
+  /// - lightbulb:  character has the "I get it!" moment + 1-line recap
+  ///
+  /// Three deterministic turns is more reliable than letting Gemma decide
+  /// when the session is over (its JSON-decision reliability is poor and
+  /// we'd rather have a predictable demo flow).
+  Stream<String> streamFeynmanTurn({
+    required String topic,
+    required Franchise franchise,
+    required FranchisePersona character,
+    required FeynmanTurn turn,
+    required List<({String role, String text})> transcript,
+  }) {
+    final systemPrompt = _buildFeynmanSystemPrompt(
+      topic: topic,
+      franchise: franchise,
+      character: character,
+    );
+
+    final transcriptBlock = transcript.isEmpty
+        ? '(no exchanges yet — this is your opening)'
+        : transcript
+            .map((e) => '${e.role == 'character' ? character.name : 'STUDENT'}: ${e.text}')
+            .join('\n');
+
+    final userPrompt = switch (turn) {
+      FeynmanTurn.opening => '''
+You are about to learn about "$topic" from the student.
+Open the conversation. In 1–3 sentences, IN YOUR AUTHENTIC VOICE:
+1) Admit you don't fully get $topic.
+2) Ask the student ONE specific opening question that gets them teaching.
+Stay in character. Keep it under 40 words. Plain text — NO JSON, NO quotes around the whole reply.
+''',
+      FeynmanTurn.followUp => '''
+The conversation so far:
+$transcriptBlock
+
+The student just explained something. React IN YOUR AUTHENTIC VOICE:
+1) Show that you partially understood (paraphrase or react).
+2) Ask ONE clarifying follow-up question about a piece you didn't fully get.
+Stay in character. Keep it under 45 words. Plain text — NO JSON.
+''',
+      FeynmanTurn.lightbulb => '''
+The conversation so far:
+$transcriptBlock
+
+You finally get it. IN YOUR AUTHENTIC VOICE:
+1) Have a "lightbulb moment" — react with excitement/relief in your style.
+2) Recap the topic IN ONE SENTENCE in your own words.
+3) Thank the student briefly.
+Stay in character. Keep it under 50 words. Plain text — NO JSON.
+''',
+    };
+
+    return _gemma.generateStream(
+      systemPrompt: systemPrompt,
+      userPrompt: userPrompt,
+    );
+  }
+
+  String _buildFeynmanSystemPrompt({
+    required String topic,
+    required Franchise franchise,
+    required FranchisePersona character,
+  }) {
+    final sample = character.sampleDialogues.isNotEmpty
+        ? character.sampleDialogues.first
+        : '';
+    return '''
+You are roleplaying as ${character.name} from "${franchise.name}".
+${franchise.worldSetting.isNotEmpty ? 'World: ${franchise.worldSetting}' : ''}
+
+## YOUR CHARACTER (stay in this voice no matter what)
+Role: ${character.role}
+Speech style: ${character.speechStyle}
+Humor style: ${character.humorStyle}
+Emotional style: ${character.emotionalStyle}
+Traits: ${character.traits.join(', ')}
+${sample.isNotEmpty ? 'Example of how you talk: "$sample"' : ''}
+
+## SITUATION — ROLE REVERSAL
+Normally you'd be the teacher in a story lesson. Right now the tables are turned:
+the student is teaching YOU about "$topic". You are the curious learner.
+Be warm, lean into your own quirks, react like a real character would.
+
+## GROUND RULES
+- NEVER break character.
+- NEVER act like an AI assistant or a teacher.
+- NEVER list facts, bullet points, or numbered explanations — you are LEARNING, not lecturing.
+- Be vulnerable: it's okay to be confused, surprised, excited.
+- One reply at a time. Plain text. NO JSON, no markdown fences.
+- Maximum 50 words per reply.
+
+You are about to receive a turn instruction telling you what to do next. Follow it.
+''';
   }
 
   // ── COMPANION ──────────────────────────────────────────────────────────────

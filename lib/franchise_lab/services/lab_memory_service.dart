@@ -277,6 +277,46 @@ class LabMemoryService {
     return buf.toString();
   }
 
+  // ── FEYNMAN SESSIONS ─────────────────────────────────────────────────────────
+
+  /// Persist a Feynman / role-reversal session as a memory event so the
+  /// Companion can later notice "you taught X to Y last week" and the
+  /// Profile can surface a Feynman count.
+  Future<void> retainFeynmanSession({
+    required String topic,
+    required String franchiseName,
+    required String characterName,
+    required int stars,
+    required int xpAwarded,
+  }) async {
+    final pid = _pid;
+    if (pid == null) return;
+    final content =
+        'Taught "$topic" to $characterName from $franchiseName. '
+        'Earned $stars stars and $xpAwarded XP. '
+        '(Feynman / role-reversal mastery — student successfully explained the topic.)';
+    await _db.insertMemoryEvent(pid, {
+      'type': 'feynman_taught',
+      'content': content,
+      'topic': topic,
+      'tags': LabDatabase.encodeList([
+        'feynman',
+        'topic:${LabDatabase.sanitizeKey(topic)}',
+        'character:$characterName',
+        'stars:$stars',
+      ]),
+      'created_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  Future<int> getFeynmanCount() async {
+    final pid = _pid;
+    if (pid == null) return 0;
+    final rows =
+        await _db.getMemoryEvents(pid, type: 'feynman_taught', limit: 1000);
+    return rows.length;
+  }
+
   // ── COMICS ───────────────────────────────────────────────────────────────────
 
   Future<int?> saveComic({
