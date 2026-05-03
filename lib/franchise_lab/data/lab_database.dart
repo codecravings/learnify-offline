@@ -21,9 +21,29 @@ class LabDatabase {
     final dbPath = await getDatabasesPath();
     return openDatabase(
       join(dbPath, 'franchise_lab.db'),
-      version: 1,
+      version: 2,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
+  }
+
+  Future<void> _onUpgrade(Database db, int oldV, int newV) async {
+    if (oldV < 2) await _createComics(db);
+  }
+
+  Future<void> _createComics(Database db) async {
+    await db.execute('''
+      CREATE TABLE lab_comics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        profile_id INTEGER NOT NULL,
+        topic TEXT NOT NULL,
+        franchise_id TEXT,
+        franchise_name TEXT,
+        title TEXT NOT NULL,
+        panels_json TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )
+    ''');
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -91,6 +111,45 @@ class LabDatabase {
         UNIQUE(profile_id, franchise_id)
       )
     ''');
+
+    await _createComics(db);
+  }
+
+  // ── COMICS ───────────────────────────────────────────────────────────────────
+
+  Future<int> insertComic(int profileId, Map<String, dynamic> data) async {
+    final d = await db;
+    return d.insert('lab_comics', {'profile_id': profileId, ...data});
+  }
+
+  Future<List<Map<String, dynamic>>> getComics(int profileId, {int limit = 50}) async {
+    final d = await db;
+    return d.query(
+      'lab_comics',
+      where: 'profile_id = ?',
+      whereArgs: [profileId],
+      orderBy: 'created_at DESC',
+      limit: limit,
+    );
+  }
+
+  Future<Map<String, dynamic>?> getComic(int profileId, int id) async {
+    final d = await db;
+    final rows = await d.query(
+      'lab_comics',
+      where: 'profile_id = ? AND id = ?',
+      whereArgs: [profileId, id],
+    );
+    return rows.isEmpty ? null : rows.first;
+  }
+
+  Future<void> deleteComic(int profileId, int id) async {
+    final d = await db;
+    await d.delete(
+      'lab_comics',
+      where: 'profile_id = ? AND id = ?',
+      whereArgs: [profileId, id],
+    );
   }
 
   // ── PROFILE ──────────────────────────────────────────────────────────────────
@@ -175,13 +234,23 @@ class LabDatabase {
   }
 
   Future<List<Map<String, dynamic>>> getMemoryEvents(int profileId,
-      {String? topic, int limit = 100}) async {
+      {String? topic, String? type, int limit = 100, bool ascending = false}) async {
     final d = await db;
+    final clauses = <String>['profile_id = ?'];
+    final args = <Object>[profileId];
+    if (topic != null) {
+      clauses.add('topic = ?');
+      args.add(topic);
+    }
+    if (type != null) {
+      clauses.add('type = ?');
+      args.add(type);
+    }
     return d.query(
       'lab_memory_events',
-      where: topic != null ? 'profile_id = ? AND topic = ?' : 'profile_id = ?',
-      whereArgs: topic != null ? [profileId, topic] : [profileId],
-      orderBy: 'created_at DESC',
+      where: clauses.join(' AND '),
+      whereArgs: args,
+      orderBy: ascending ? 'created_at ASC' : 'created_at DESC',
       limit: limit,
     );
   }
