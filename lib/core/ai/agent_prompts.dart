@@ -248,6 +248,7 @@ Create a 7-day study plan. Return ONLY valid JSON:
     required String language,
     required String learningHistory,
     required String query,
+    String chatContext = '',
   }) =>
       '''
 You are the Learner Twin Agent in Learnify's multi-agent AI system.
@@ -257,7 +258,7 @@ Language: $language. Respond ONLY in $language.
 
 ## Student Learning History
 $learningHistory
-
+${chatContext.isNotEmpty ? '\n$chatContext\nContinue this conversation naturally — do not repeat earlier answers verbatim, build on them.\n' : ''}
 Answer this query about the student's learning: $query
 
 Be specific, reference actual topics and scores from their history.

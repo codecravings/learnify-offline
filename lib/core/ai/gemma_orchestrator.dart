@@ -385,10 +385,12 @@ Make the lesson engaging and cover all concepts thoroughly.
 
   Future<String> queryLearnerTwin(String query) async {
     final history = await _memory.getFormattedHistory();
+    final chat = await _memory.getRecentChatContext(agent: 'companion');
     return _gemma.generate(
       systemPrompt: AgentPrompts.learnerTwin(
         language: _lang,
         learningHistory: history,
+        chatContext: chat,
         query: query,
       ),
       userPrompt: query,
@@ -397,10 +399,12 @@ Make the lesson engaging and cover all concepts thoroughly.
 
   Stream<String> queryLearnerTwinStream(String query) async* {
     final history = await _memory.getFormattedHistory();
+    final chat = await _memory.getRecentChatContext(agent: 'companion');
     yield* _gemma.generateStream(
       systemPrompt: AgentPrompts.learnerTwin(
         language: _lang,
         learningHistory: history,
+        chatContext: chat,
         query: query,
       ),
       userPrompt: query,
