@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -7,6 +8,7 @@ import '../../../core/ai/gemma_orchestrator.dart';
 import '../../../core/services/local_memory_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/glass_container.dart';
+import '../../../routes/app_router.dart';
 
 /// Learner Twin chat — powered by on-device Gemma 4 over the student's local memory.
 /// Every exchange is retained in SQLite so cross-session context compounds.
@@ -27,6 +29,7 @@ class _StudyCompanionScreenState extends State<StudyCompanionScreen> {
   String? _studyPulse;
   bool _pulseLoading = true;
   bool _generating = false;
+  Map<String, dynamic>? _activePath;
 
   static const _quickActions = [
     _QuickAction('What should I study next?', Icons.explore_rounded,
@@ -55,10 +58,21 @@ class _StudyCompanionScreenState extends State<StudyCompanionScreen> {
   Future<void> _loadPulse() async {
     setState(() => _pulseLoading = true);
     try {
+      final paths = await _memory.getActiveMasteryPaths();
+      Map<String, dynamic>? active;
+      for (final p in paths) {
+        final completed = (p['completedStepIndices'] as List).length;
+        final total = (p['steps'] as List).length;
+        if (completed < total) {
+          active = p;
+          break;
+        }
+      }
       final pulse = await _orchestrator.getStudyPulse();
       if (mounted) {
         setState(() {
           _studyPulse = pulse;
+          _activePath = active;
           _pulseLoading = false;
         });
       }
@@ -227,6 +241,69 @@ class _StudyCompanionScreenState extends State<StudyCompanionScreen> {
     );
   }
 
+  // ── Active mastery path chip (inside pulse card) ───────────────────────
+
+  Widget _buildActivePathChip(Map<String, dynamic> path) {
+    final steps = (path['steps'] as List).cast<Map<String, dynamic>>();
+    final completed = (path['completedStepIndices'] as List).length;
+    final total = steps.length;
+    final current = (path['currentStepIndex'] as int).clamp(0, total - 1);
+    final topic = path['topic'] as String;
+    final nextTitle = steps.isNotEmpty ? (steps[current]['title'] as String? ?? '') : '';
+
+    return GestureDetector(
+      onTap: () => context.push(AppRoutes.masteryPath, extra: {'topic': topic}),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              AppTheme.accentCyan.withAlpha(40),
+              AppTheme.accentPurple.withAlpha(30),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppTheme.accentCyan.withAlpha(80)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.route_rounded,
+                color: AppTheme.accentCyan, size: 16),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$completed/$total · $topic',
+                    style: GoogleFonts.orbitron(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.accentCyan,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Next: $nextTitle',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 12,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios_rounded,
+                color: AppTheme.accentCyan.withAlpha(150), size: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ── Study pulse card ───────────────────────────────────────────────────
 
   Widget _buildPulseCard() {
@@ -286,6 +363,10 @@ class _StudyCompanionScreenState extends State<StudyCompanionScreen> {
                 height: 1.5,
               ),
             ),
+          if (_activePath != null) ...[
+            const SizedBox(height: 12),
+            _buildActivePathChip(_activePath!),
+          ],
         ],
       ),
     );

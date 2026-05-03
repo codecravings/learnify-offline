@@ -278,6 +278,13 @@ class _HomeDashboardState extends State<HomeDashboard>
     _topicCtrl.clear();
   }
 
+  void _launchMasteryPath() {
+    final topic = _topicCtrl.text.trim();
+    if (topic.isEmpty) return;
+    context.push('/mastery-path', extra: {'topic': topic});
+    _topicCtrl.clear();
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).padding.bottom + 90;
@@ -533,6 +540,27 @@ class _HomeDashboardState extends State<HomeDashboard>
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: _launchMasteryPath,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.route_rounded,
+                    size: 14, color: AppTheme.accentCyan.withAlpha(200)),
+                const SizedBox(width: 6),
+                Text(
+                  'Build mastery path instead →',
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.accentCyan,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

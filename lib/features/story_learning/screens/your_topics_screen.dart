@@ -6,6 +6,7 @@ import '../../../core/services/local_memory_service.dart';
 import '../../../core/services/local_profile_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/glass_container.dart';
+import '../../../routes/app_router.dart';
 
 /// Shows every topic the student has studied — pulled from the local SQLite DB.
 class YourTopicsScreen extends StatefulWidget {
@@ -143,6 +144,13 @@ class _YourTopicsScreenState extends State<YourTopicsScreen> {
                       child: _TopicTile(
                         topic: items[i],
                         onContinue: () => _continueTopic(items[i]),
+                        onOpenPath: () => context.push(
+                          AppRoutes.masteryPath,
+                          extra: {
+                            'topic': items[i]['name'] as String? ?? '',
+                            'level': (items[i]['level'] as String?) ?? 'basics',
+                          },
+                        ),
                       )
                           .animate(delay: (40 * i).ms)
                           .fadeIn(duration: 200.ms)
@@ -275,9 +283,14 @@ class _FilterChip extends StatelessWidget {
 }
 
 class _TopicTile extends StatelessWidget {
-  const _TopicTile({required this.topic, required this.onContinue});
+  const _TopicTile({
+    required this.topic,
+    required this.onContinue,
+    required this.onOpenPath,
+  });
   final Map<String, dynamic> topic;
   final VoidCallback onContinue;
+  final VoidCallback onOpenPath;
 
   Color _levelColor(BuildContext context, String level) =>
       switch (level.toLowerCase()) {
@@ -383,6 +396,23 @@ class _TopicTile extends StatelessWidget {
                   ],
                 ),
               ],
+            ),
+          ),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: onOpenPath,
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                color: AppTheme.accentCyanOf(context).withAlpha(22),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                    color: AppTheme.accentCyanOf(context).withAlpha(70),
+                    width: 0.7),
+              ),
+              child: Icon(Icons.route_rounded,
+                  size: 14, color: AppTheme.accentCyanOf(context)),
             ),
           ),
           const SizedBox(width: 4),
