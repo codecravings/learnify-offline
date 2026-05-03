@@ -19,9 +19,33 @@ class AppDatabase {
     final dbPath = await getDatabasesPath();
     return openDatabase(
       join(dbPath, 'learnify.db'),
-      version: 1,
+      version: 2,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
+  }
+
+  Future<void> _onUpgrade(Database db, int oldV, int newV) async {
+    if (oldV < 2) await _createTopicPaths(db);
+  }
+
+  Future<void> _createTopicPaths(Database db) async {
+    await db.execute('''
+      CREATE TABLE topic_paths (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        profile_id INTEGER NOT NULL,
+        topic_key TEXT NOT NULL,
+        topic_name TEXT NOT NULL,
+        steps_json TEXT NOT NULL,
+        current_step_index INTEGER NOT NULL DEFAULT 0,
+        completed_step_indices TEXT NOT NULL DEFAULT '[]',
+        estimated_minutes INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(profile_id, topic_key),
+        FOREIGN KEY (profile_id) REFERENCES profiles(id)
+      )
+    ''');
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -95,6 +119,58 @@ class AppDatabase {
         FOREIGN KEY (profile_id) REFERENCES profiles(id)
       )
     ''');
+
+    await _createTopicPaths(db);
+  }
+
+  // ── TOPIC PATHS ──────────────────────────────────────────────────────────────
+
+  Future<void> upsertTopicPath(int profileId, Map<String, dynamic> data) async {
+    final d = await db;
+    await d.insert(
+      'topic_paths',
+      {'profile_id': profileId, ...data},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<Map<String, dynamic>?> getTopicPath(int profileId, String topicKey) async {
+    final d = await db;
+    final rows = await d.query(
+      'topic_paths',
+      where: 'profile_id = ? AND topic_key = ?',
+      whereArgs: [profileId, topicKey],
+    );
+    return rows.isEmpty ? null : rows.first;
+  }
+
+  Future<List<Map<String, dynamic>>> getAllTopicPaths(int profileId) async {
+    final d = await db;
+    return d.query(
+      'topic_paths',
+      where: 'profile_id = ?',
+      whereArgs: [profileId],
+      orderBy: 'updated_at DESC',
+    );
+  }
+
+  Future<void> updateTopicPathProgress(
+    int profileId,
+    String topicKey, {
+    required int currentStepIndex,
+    required List<int> completedStepIndices,
+  }) async {
+    final d = await db;
+    await d.update(
+      'topic_paths',
+      {
+        'current_step_index': currentStepIndex,
+        'completed_step_indices': encodeList(completedStepIndices),
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      where: 'profile_id = ? AND topic_key = ?',
+      whereArgs: [profileId, topicKey],
+    );
   }
 
   // ── PROFILES ─────────────────────────────────────────────────────────────────
