@@ -28,6 +28,8 @@ class StoryScreen extends StatefulWidget {
     this.preselectedLevel,
     this.preselectedStyle,
     this.franchiseName,
+    this.pathTopicKey,
+    this.pathStepIndex,
   });
 
   final String? lessonId;
@@ -37,6 +39,8 @@ class StoryScreen extends StatefulWidget {
   final String? preselectedLevel;
   final String? preselectedStyle;
   final String? franchiseName;
+  final String? pathTopicKey;
+  final int? pathStepIndex;
 
   @override
   State<StoryScreen> createState() => _StoryScreenState();
@@ -253,6 +257,8 @@ class _StoryScreenState extends State<StoryScreen> {
       total: total,
       missedQuestions: _missedQuestions,
       concepts: concepts,
+      pathTopicKey: widget.pathTopicKey,
+      pathStepIndex: widget.pathStepIndex,
     );
 
     await _profile.updateStreak((_profile.currentProfile?.streak ?? 0) + 1);

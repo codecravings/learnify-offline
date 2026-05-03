@@ -18,6 +18,7 @@ import '../features/search/screens/search_screen.dart';
 import '../features/achievements/screens/achievements_screen.dart';
 import '../features/courses/screens/courses_screen.dart';
 import '../features/scan/screens/scan_textbook_screen.dart';
+import '../features/mastery_path/screens/mastery_path_screen.dart';
 
 abstract class AppRoutes {
   static const String setup = '/setup';
@@ -32,6 +33,7 @@ abstract class AppRoutes {
   static const String achievements = '/achievements';
   static const String courses = '/courses';
   static const String scan = '/scan';
+  static const String masteryPath = '/mastery-path';
   static const String userProfile = '/profile';
 }
 
@@ -97,9 +99,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             subjectId: extra['subjectId'] as String?,
             chapterId: extra['chapterId'] as String?,
             customTopic: extra['customTopic'] as String?,
-            preselectedLevel: extra['level'] as String?,
+            preselectedLevel:
+                (extra['preselectedLevel'] ?? extra['level']) as String?,
             preselectedStyle: extra['preselectedStyle'] as String?,
             franchiseName: extra['franchiseName'] as String?,
+            pathTopicKey: extra['pathTopicKey'] as String?,
+            pathStepIndex: extra['pathStepIndex'] as int?,
           );
         },
       ),
@@ -146,6 +151,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.scan,
         builder: (_, __) => const ScanTextbookScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.masteryPath,
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? {};
+          return MasteryPathScreen(
+            topic: extra['topic'] as String? ?? '',
+            level: extra['level'] as String? ?? 'basics',
+          );
+        },
       ),
       GoRoute(
         path: AppRoutes.userProfile,
