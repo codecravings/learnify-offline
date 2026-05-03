@@ -11,6 +11,7 @@ abstract class AgentPrompts {
     required String memoryContext,
     required String language,
     String mood = '',
+    bool dyslexic = false,
   }) {
     final styleBlock = _styleBlock(style, franchiseName);
     final memBlock = memoryContext.isNotEmpty
@@ -21,6 +22,7 @@ Adapt the lesson: spend more time on past weak areas, briefly recap mastered con
 '''
         : '';
     final moodBlock = _moodBlock(mood);
+    final a11yBlock = _a11yBlock(dyslexic: dyslexic);
 
     return '''
 You are the Story Agent in Learnify's multi-agent AI system — a creative educational storyteller.
@@ -39,6 +41,7 @@ For franchise mode, use ACTUAL characters from "$franchiseName" with authentic d
 $styleBlock
 $memBlock
 $moodBlock
+$a11yBlock
 
 ## Output — return ONLY valid JSON, no markdown fences:
 {
@@ -253,8 +256,10 @@ Create a 7-day study plan. Return ONLY valid JSON:
     required String query,
     String chatContext = '',
     String mood = '',
+    bool dyslexic = false,
   }) {
     final moodBlock = _moodBlock(mood);
+    final a11yBlock = _a11yBlock(dyslexic: dyslexic);
     return '''
 You are the Learner Twin Agent in Learnify's multi-agent AI system.
 You maintain a deep model of this specific learner — their strengths, weaknesses,
@@ -265,6 +270,7 @@ Language: $language. Respond ONLY in $language.
 $learningHistory
 ${chatContext.isNotEmpty ? '\n$chatContext\nContinue this conversation naturally — do not repeat earlier answers verbatim, build on them.\n' : ''}
 $moodBlock
+$a11yBlock
 
 Answer this query about the student's learning: $query
 
@@ -353,6 +359,20 @@ Return ONLY valid JSON:
 ''';
 
   // ── HELPERS ──────────────────────────────────────────────────────────────────
+
+  /// Accessibility prompt fragment — when the learner has enabled dyslexia-
+  /// friendly mode, instructs the model to use shorter sentences and simpler
+  /// vocabulary. Empty when off so prompts are unchanged for everyone else.
+  static String _a11yBlock({required bool dyslexic}) {
+    if (!dyslexic) return '';
+    return '''
+## Accessibility — Dyslexia-friendly Mode
+- Use short sentences (max 12 words). One idea per sentence.
+- Prefer common words. Avoid technical jargon unless you immediately define it.
+- Keep dialogue lines under 15 words each.
+- Break long explanations into separate scenes/lines, not run-ons.
+''';
+  }
 
   /// Tone-shift block injected by mood-aware agents.
   /// Empty string when no mood is set — keeps prompts unchanged for cold start.

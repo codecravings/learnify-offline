@@ -23,6 +23,7 @@ class GemmaOrchestrator {
 
   String get _lang => _profile.currentProfile?.language ?? 'English';
   String get _mood => _profile.currentProfile?.currentMood ?? '';
+  bool get _dyslexic => _profile.currentProfile?.dyslexicMode ?? false;
 
   // ── STORY AGENT ─────────────────────────────────────────────────────────────
 
@@ -41,6 +42,7 @@ class GemmaOrchestrator {
       memoryContext: memCtx,
       language: _lang,
       mood: _mood,
+      dyslexic: _dyslexic,
     );
 
     Future<String> run(String userPrompt) => _gemma.generate(
@@ -109,6 +111,7 @@ class GemmaOrchestrator {
       memoryContext: memCtx,
       language: _lang,
       mood: _mood,
+      dyslexic: _dyslexic,
     );
 
     final userPrompt = '''
@@ -396,6 +399,7 @@ Make the lesson engaging and cover all concepts thoroughly.
         chatContext: chat,
         query: query,
         mood: _mood,
+        dyslexic: _dyslexic,
       ),
       userPrompt: query,
     );
@@ -411,6 +415,7 @@ Make the lesson engaging and cover all concepts thoroughly.
         chatContext: chat,
         query: query,
         mood: _mood,
+        dyslexic: _dyslexic,
       ),
       userPrompt: query,
     );
