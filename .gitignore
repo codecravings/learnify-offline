@@ -92,3 +92,6 @@ Thumbs.db
 *.log
 log/
 .claude/
+
+# Local WIP / scratch
+.cache/
