@@ -1,16 +1,22 @@
-# 🎓 Learnify — Offline AI Learning Companion 📚⚡
+# 🎓 Learnify — Emotionally Adaptive Offline Learning 📚⚡
 
-> **A fully on-device, multi-agent learning app powered by Gemma 4 E2B** running locally via LiteRT-LM.
+> **An emotionally adaptive offline AI learning companion.**
+> One Gemma 4 E2B model running locally via LiteRT-LM —
+> stories that read like a WhatsApp group chat, characters
+> pulled from 80 of your favourite franchises, and a
+> Learner Twin that actually remembers you.
+>
 > 🚫 No cloud calls
 > 🚫 No API keys
 > 🚫 No data leaves the device
-> ✅ 100% private, fast, and offline-first
+> ✅ 100% private, fast, offline-first
 
 Built for the **Kaggle Gemma 4 Good Hackathon** 🌍✨ *(Future of Education)*
 
 ![flutter](https://img.shields.io/badge/flutter-3.x-blue)
 ![gemma](https://img.shields.io/badge/gemma-4--E2B-purple)
-![offline](https://img.shields.io/badge/runtime-on--device-green)
+![runtime](https://img.shields.io/badge/runtime-on--device-green)
+![franchises](https://img.shields.io/badge/franchises-80-magenta)
 
 ---
 
