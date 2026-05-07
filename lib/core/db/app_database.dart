@@ -17,12 +17,25 @@ class AppDatabase {
 
   Future<Database> _open() async {
     final dbPath = await getDatabasesPath();
+    await _wipeLegacyLabDb(dbPath);
     return openDatabase(
       join(dbPath, 'learnify.db'),
       version: 4,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
+  }
+
+  /// Best-effort cleanup of the franchise_lab.db that lived alongside the
+  /// main DB before the Lab subapp was merged into main. Silent on failure
+  /// — never block app startup. Once deleted, this is effectively a no-op.
+  Future<void> _wipeLegacyLabDb(String dbPath) async {
+    try {
+      final legacy = join(dbPath, 'franchise_lab.db');
+      if (await databaseExists(legacy)) {
+        await deleteDatabase(legacy);
+      }
+    } catch (_) {}
   }
 
   Future<void> _onUpgrade(Database db, int oldV, int newV) async {
