@@ -119,14 +119,16 @@ Your learning belongs to **you** ❤️
 
 # 🛠 Tech Stack
 
-| Layer         | Choice                                      |
-| ------------- | ------------------------------------------- |
-| 🧠 Model      | `litert-community/gemma-4-E2B-it-litert-lm` |
-| ⚙ Runtime     | `flutter_gemma` v0.13.5                     |
-| 📱 Framework  | Flutter 3.x                                 |
-| 🧭 Navigation | go_router                                   |
-| 💾 Database   | SQLite                                      |
-| 🎨 UI         | Dark glassmorphism + neon glow              |
+| Layer         | Choice                                                              |
+| ------------- | ------------------------------------------------------------------- |
+| 🧠 Model      | `litert-community/gemma-4-E2B-it-litert-lm` (~2.58 GB, sideloadable) |
+| ⚙ Runtime     | `flutter_gemma` v0.13.5 (LiteRT-LM)                                 |
+| 📱 Framework  | Flutter 3.x · Dart                                                  |
+| 🧭 Navigation | go_router                                                           |
+| 💾 Storage    | SQLite via `sqflite` (6 tables, multi-profile)                      |
+| 🗣 TTS        | `flutter_tts` — device-local, lazy init                             |
+| 🎨 UI         | Dark glassmorphism + neon · Atkinson Hyperlegible (a11y)            |
+| 🎭 Personas   | 80 franchises × 6 characters × 5+ sample dialogues (JSON asset)     |
 
 ---
 
@@ -167,41 +169,46 @@ After that:
 ```bash
 lib/
 ├── core/
-│   ├── ai/
-│   ├── db/
-│   ├── services/
-│   ├── theme/
-│   └── widgets/
+│   ├── ai/           # GemmaService, GemmaOrchestrator, AgentPrompts
+│   ├── db/           # SQLite (profiles, topics, quiz, memory, paths)
+│   ├── franchises/   # FranchiseLoader + persona models (80 franchises)
+│   ├── services/     # LocalProfileService, LocalMemoryService, TTS
+│   ├── theme/        # Dark glassmorphism + dyslexic font variant
+│   └── widgets/      # GlassContainer, NeonButton, BionicText, KaraokeText
 ├── features/
-│   ├── setup/
-│   ├── story_learning/
-│   ├── scan/
-│   ├── companion/
-│   ├── profile/
-│   ├── skill_tree/
-│   └── knowledge_graph/
-└── routes/
+│   ├── setup/        # Model download / sideload + profile creation
+│   ├── auth/         # Home shell + dashboard
+│   ├── story_learning/  # Chat-bubble Story + Feynman screen
+│   ├── companion/    # Learner Twin chat
+│   ├── mastery_path/ # Duolingo-style stepped UI
+│   ├── scan/         # Multimodal textbook capture
+│   └── profile/
+└── routes/           # /lesson, /feynman, /scan, /mastery-path, /home/*
 ```
 
 ---
 
 # 🧠 Multi-Agent Design
 
-One Gemma instance. Six personalities. Infinite possibilities.
+One Gemma model in RAM. Identity = system prompt. The orchestrator routes intent and threads `language` + `mood` + `dyslexic` flags into every call.
 
 ```text
-User → Orchestrator
-   ├── Story Agent
-   ├── Tutor Agent
-   ├── Quiz Agent
-   ├── Planner Agent
-   ├── Explorer Agent
-   └── Learner Twin
+User → GemmaOrchestrator
+   ├── 📖 Story            (chat-bubble lessons, franchise persona)
+   ├── 🧠 Tutor            (concept explanation)
+   ├── ❓ Quiz             (targeted questions, weak-area aware)
+   ├── 📅 Planner          (7-day study schedule)
+   ├── 🔍 Explorer         (sub-topic decomposition)
+   ├── 🗺 Mastery          (5–7 step progressive paths)
+   ├── 👤 Learner Twin     (Companion chat with memory)
+   ├── 📷 Image Analysis   (textbook scan)
+   └── 🎓 Feynman          (role-reversal teaching)
 ```
 
-⚡ Shared weights in RAM
-⚡ Ultra efficient
-⚡ Add new agents with only prompts
+⚡ Shared weights — one model, all agents
+⚡ Progressive streaming on Story (intro paints in seconds, tail arrives in background)
+⚡ Cast locked in Dart so Gemma can't invent off-character names
+⚡ Add a new agent = a new prompt + an orchestrator method
 
 ---
 
