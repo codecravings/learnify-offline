@@ -41,19 +41,39 @@ Your tutor, planner, storyteller, and study companion live **inside your phone**
 
 # 🌟 What Makes Learnify Special?
 
-## 🤖 6 AI Agents, One Brain
+## 💬 Story Learning — like a group chat, not a textbook
 
-Powered by a single Gemma model with specialized roles:
+The flagship moment. Type any topic, pick a vibe, and the lesson arrives as a real chat conversation between 2–3 characters reacting, joking, paraphrasing, getting it wrong, then getting it right.
 
-📖 Story Agent
-🧠 Tutor Agent
-❓ Quiz Agent
-📅 Planner Agent
-🔍 Explorer Agent
-👤 Learner Twin Agent
-📷 Image Analysis Agent
+🎭 Two modes:
 
-All coordinated through one smart orchestrator.
+* 🛠 **Practical** — friend-group chat, daily-life examples *("bro why do bikes skid in the rain?" / "less friction" / "wait so friction is actually GOOD??")*
+* 🎬 **Movie / TV** — pick from **80 franchises** (anime, cartoons, K-drama, gaming, Indian TV, movies). Naruto, Stranger Things, Money Heist, Goku, Walter White, MS Dhoni, Itachi… they teach in their own voice.
+
+⚡ **Progressive generation**: scenes 1–4 paint within seconds while Gemma writes the rest in the background — the small on-device model never feels slow.
+
+🔁 Each message reveals on tap, scrolls into a chat feed, and the cast is locked in code so Gemma can't drift off-character.
+
+---
+
+## 🧠 Learner Twin — your AI that remembers
+
+Your study companion that builds a private model of YOU over time, fully on-device.
+
+Ask:
+
+📝 What should I study next?
+😵 Where am I weakest?
+📈 How am I improving?
+🔥 Motivate me today
+
+Every chat compounds — it doesn't reset between sessions. Every quiz, every mood check-in, every story you finished feeds the same SQLite memory.
+
+---
+
+## 🗺 Mastery Path — Duolingo-style spine
+
+Type a topic → Gemma decomposes it into 5–7 progressive steps with concept tags + difficulty. Each step is one short story (~3 minutes). Tiny wins, visible progress, ticks fill in as you pass each step at ≥70% accuracy.
 
 ---
 
@@ -63,51 +83,29 @@ Point your camera at a page... and magic begins ✨
 
 📚 Detects chapter + topic
 🧩 Extracts concepts
-🎯 Generates a personalized lesson instantly
-🗣 Explains in your level + language
+🎯 Generates the same chat-style lesson instantly
+🗣 In your level + language
 
 ---
 
-## 🎮 Story-Based Learning
+## 🎓 Teach It Back (Feynman Mode)
 
-Learning becomes addictive:
-
-🎚 Choose difficulty
-🎭 Choose style:
-
-* 😂 Meme Mode
-* 🛠 Practical Mode
-* 🎬 Movie / TV Style
-
-Then get:
-
-📖 AI-generated visual story
-🧠 Quiz battle
-⭐ XP rewards
-🏆 Stars & streaks
+After a strong score (≥70%) on a franchise lesson, the tables flip — the character admits they didn't quite get it and asks **you** to teach them. Three deterministic turns (opening question → follow-up → lightbulb moment), all in their authentic voice. Teaching is mastery.
 
 ---
 
-## 👤 Learner Twin (Study Companion)
+## 😊 Emotionally Aware
 
-Your AI study partner that remembers everything locally ❤️
-
-Ask:
-
-📝 What should I study next?
-😵 Where am I weakest?
-📈 How am I improving?
-🔥 Motivate me today
+Daily mood check-in (calm / hyped / curious / anxious / sad) quietly reshapes the tone of every story and the picker's franchise suggestions — anxious days lean toward calmer, gentler casts; hyped days unlock loud bombastic ones.
 
 ---
 
-## 🌳 Skill Tree + Knowledge Graph
+## ♿ Accessibility, opt-in
 
-Watch growth visually:
+* **Dyslexia-friendly mode** — Atkinson Hyperlegible font, BionicText word emphasis, prompts auto-shorten sentences.
+* **Read-aloud (TTS)** — every chat bubble can be spoken aloud with karaoke-style word highlighting via the device's offline TTS engine.
 
-🌱 Skills unlock over time
-🕸 Concept relationships shown clearly
-🎯 Track mastery journey
+Both default OFF. Zero footprint when not used.
 
 ---
 
