@@ -6,15 +6,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../../core/ai/gemma_orchestrator.dart';
-import '../../../core/services/dynamic_catalog_service.dart';
-import '../../../core/services/local_memory_service.dart';
 import '../../../core/services/local_profile_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../core/widgets/glass_container.dart';
-import '../../../core/widgets/neon_button.dart';
 import '../../../core/widgets/particle_background.dart';
-import '../../story_learning/models/story_style.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HomeScreen — Shell with 3-tab glass bottom nav
@@ -170,12 +166,8 @@ class _HomeDashboardState extends State<HomeDashboard>
     with WidgetsBindingObserver {
   final _topicCtrl = TextEditingController();
   final _profile = LocalProfileService.instance;
-  final _memory = LocalMemoryService.instance;
   final _orchestrator = GemmaOrchestrator.instance;
 
-  List<Map<String, dynamic>> _studiedTopics = [];
-  List<Map<String, dynamic>> _suggestedSubjects = [];
-  bool _subjectsLoading = true;
   String? _studyPulse;
   bool _pulseLoading = true;
 
@@ -184,9 +176,7 @@ class _HomeDashboardState extends State<HomeDashboard>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _profile.addListener(_onProfileChanged);
-    _loadTopics();
     _loadStudyPulse();
-    _loadSubjects();
   }
 
   @override
@@ -199,44 +189,11 @@ class _HomeDashboardState extends State<HomeDashboard>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _loadTopics();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _loadTopics();
+    if (state == AppLifecycleState.resumed) _loadStudyPulse();
   }
 
   void _onProfileChanged() {
     if (mounted) setState(() {});
-  }
-
-  Future<void> _loadTopics() async {
-    final topics = await _memory.getAllTopicProgress();
-    if (mounted) setState(() => _studiedTopics = topics);
-  }
-
-  Future<void> _loadSubjects({bool force = false}) async {
-    if (!mounted) return;
-    setState(() => _subjectsLoading = true);
-    try {
-      final subjects = await DynamicCatalogService.instance
-          .suggestedSubjects(force: force);
-      if (mounted) {
-        setState(() {
-          _suggestedSubjects = subjects;
-          _subjectsLoading = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _suggestedSubjects = const [];
-          _subjectsLoading = false;
-        });
-      }
-    }
   }
 
   Future<void> _loadStudyPulse() async {
@@ -262,9 +219,7 @@ class _HomeDashboardState extends State<HomeDashboard>
   }
 
   Future<void> _refresh() async {
-    await _loadTopics();
     await _loadStudyPulse();
-    await _loadSubjects(force: true);
   }
 
   String get _displayName => _profile.currentProfile?.name ?? 'Learner';
@@ -274,7 +229,7 @@ class _HomeDashboardState extends State<HomeDashboard>
   void _launchCustomTopic() {
     final topic = _topicCtrl.text.trim();
     if (topic.isEmpty) return;
-    context.push('/topic-explorer', extra: {'topic': topic});
+    context.push('/lesson', extra: {'customTopic': topic});
     _topicCtrl.clear();
   }
 
@@ -331,22 +286,6 @@ class _HomeDashboardState extends State<HomeDashboard>
                     .animate()
                     .fadeIn(delay: 180.ms, duration: 600.ms)
                     .slideY(begin: 0.04, duration: 600.ms),
-                const SizedBox(height: 22),
-                _buildStyleGrid()
-                    .animate()
-                    .fadeIn(delay: 240.ms, duration: 600.ms),
-                const SizedBox(height: 22),
-                _buildSubjectsSection()
-                    .animate()
-                    .fadeIn(delay: 300.ms, duration: 600.ms),
-                const SizedBox(height: 20),
-                _buildYourTopics()
-                    .animate()
-                    .fadeIn(delay: 360.ms, duration: 600.ms),
-                const SizedBox(height: 20),
-                _buildUtilityRow()
-                    .animate()
-                    .fadeIn(delay: 420.ms, duration: 600.ms),
               ],
             ),
           ),
@@ -392,16 +331,8 @@ class _HomeDashboardState extends State<HomeDashboard>
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _iconBtn(Icons.search_rounded, AppTheme.accentCyan,
-                    () => context.push('/search')),
-                const SizedBox(width: 6),
-                _iconBtn(Icons.dark_mode_rounded, AppTheme.accentPurple,
-                    () => ThemeProvider.instance.toggleTheme()),
-              ],
-            ),
+            _iconBtn(Icons.dark_mode_rounded, AppTheme.accentPurple,
+                () => ThemeProvider.instance.toggleTheme()),
             const SizedBox(height: 6),
             _statChip(Icons.bolt_rounded, '$_xp XP', AppTheme.accentGold),
             const SizedBox(height: 6),
@@ -820,478 +751,6 @@ class _HomeDashboardState extends State<HomeDashboard>
     );
   }
 
-  // ── Style grid (6 narrative styles) ────────────────────────────────────────
-
-  Widget _buildStyleGrid() {
-    final styles = StoryStyle.values;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sectionHeader('Learning Styles', Icons.palette_rounded,
-            AppTheme.accentGold, 'Pick how Gemma explains — switch anytime'),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 110,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: styles.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 10),
-            itemBuilder: (_, i) => _buildStyleTile(styles[i]),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStyleTile(StoryStyle style) {
-    return GestureDetector(
-      onTap: () {
-        // Open topic input prefilled with a sample — user replaces it
-        showModalBottomSheet(
-          context: context,
-          backgroundColor: AppTheme.backgroundSecondary,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          builder: (_) => _StylePickerSheet(style: style),
-        );
-      },
-      child: Container(
-        width: 130,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          color: style.color.withAlpha(18),
-          border: Border.all(color: style.color.withAlpha(60), width: 0.8),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(style.icon, color: style.color, size: 22),
-            const Spacer(),
-            Text(
-              style.label.toUpperCase(),
-              style: GoogleFonts.orbitron(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: style.color,
-                letterSpacing: 1,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              style.description,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.spaceGrotesk(
-                fontSize: 9,
-                color: AppTheme.textTertiary,
-                height: 1.25,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── Subjects (dynamic Gemma suggestions) ────────────────────────────────
-
-  static const _subjectColors = [
-    AppTheme.accentCyan,
-    AppTheme.accentPurple,
-    AppTheme.accentGreen,
-    AppTheme.accentGold,
-    AppTheme.accentMagenta,
-    AppTheme.accentOrange,
-  ];
-
-  Widget _buildSubjectsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sectionHeader(
-          'Explore Subjects',
-          Icons.menu_book_rounded,
-          AppTheme.accentCyan,
-          _subjectsLoading
-              ? 'Gemma is picking subjects for you…'
-              : _suggestedSubjects.isEmpty
-                  ? 'Pull to refresh to generate suggestions'
-                  : 'Chosen by Gemma based on your profile',
-          trailingTap: () => context.push('/courses'),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 140,
-          child: _subjectsLoading
-              ? _buildSubjectsSkeleton()
-              : _suggestedSubjects.isEmpty
-                  ? _buildSubjectsEmpty()
-                  : ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _suggestedSubjects.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 12),
-                      itemBuilder: (_, i) => _buildSubjectCard(
-                        _suggestedSubjects[i],
-                        _subjectColors[i % _subjectColors.length],
-                      ),
-                    ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSubjectsSkeleton() {
-    return ListView.separated(
-      scrollDirection: Axis.horizontal,
-      itemCount: 4,
-      separatorBuilder: (_, __) => const SizedBox(width: 12),
-      itemBuilder: (_, i) => Container(
-        width: 150,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          color: AppTheme.surfaceLight.withAlpha(40),
-          border: Border.all(color: Colors.white.withAlpha(14)),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSubjectsEmpty() {
-    return GlassContainer(
-      padding: const EdgeInsets.all(18),
-      borderColor: AppTheme.accentCyan.withAlpha(40),
-      child: Row(
-        children: [
-          Icon(Icons.psychology_rounded,
-              color: AppTheme.accentCyan.withAlpha(140), size: 28),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'Tap the refresh icon — Gemma will suggest subjects for you.',
-              style: GoogleFonts.spaceGrotesk(
-                fontSize: 12,
-                color: AppTheme.textSecondary,
-                height: 1.4,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSubjectCard(Map<String, dynamic> subject, Color color) {
-    final name = (subject['name'] as String?)?.trim() ?? 'Subject';
-    final emoji = (subject['emoji'] as String?)?.trim();
-    final reason = (subject['reason'] as String?)?.trim() ?? '';
-
-    return GestureDetector(
-      onTap: () => context.push('/topic-explorer', extra: {'topic': name}),
-      child: Container(
-        width: 150,
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          color: color.withAlpha(15),
-          border: Border.all(color: color.withAlpha(50), width: 0.8),
-          boxShadow: [
-            BoxShadow(color: color.withAlpha(15), blurRadius: 12),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: color.withAlpha(30),
-                  ),
-                  child: emoji != null && emoji.isNotEmpty
-                      ? Text(emoji, style: const TextStyle(fontSize: 16))
-                      : Icon(Icons.school, color: color, size: 18),
-                ),
-                const Spacer(),
-                _pill('AI', AppTheme.accentCyan),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              name,
-              style: GoogleFonts.orbitron(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: color,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 4),
-            Expanded(
-              child: Text(
-                reason,
-                style: GoogleFonts.spaceGrotesk(
-                  fontSize: 9,
-                  color: AppTheme.textTertiary,
-                  height: 1.3,
-                ),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── Your topics ────────────────────────────────────────────────────────────
-
-  Widget _buildYourTopics() {
-    final topics = _studiedTopics;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sectionHeader(
-          'Your Topics',
-          Icons.history_rounded,
-          AppTheme.accentPurple,
-          topics.isEmpty
-              ? 'Studied topics will appear here'
-              : '${topics.length} topic${topics.length == 1 ? '' : 's'} in memory',
-          trailingTap: topics.isEmpty ? null : () => context.push('/topics'),
-        ),
-        const SizedBox(height: 10),
-        if (topics.isEmpty)
-          GlassContainer(
-            borderColor: AppTheme.accentPurple.withAlpha(40),
-            padding: const EdgeInsets.all(18),
-            child: Row(
-              children: [
-                Icon(Icons.school_rounded,
-                    color: AppTheme.accentPurple.withAlpha(120), size: 28),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Start any lesson — Gemma builds a local learning memory for you.',
-                    style: GoogleFonts.spaceGrotesk(
-                      fontSize: 12,
-                      color: AppTheme.textSecondary,
-                      height: 1.4,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          )
-        else
-          SizedBox(
-            height: 130,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: topics.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 10),
-              itemBuilder: (_, i) => _buildTopicCard(topics[i]),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildTopicCard(Map<String, dynamic> topic) {
-    final name = topic['name'] as String? ?? 'Topic';
-    final level = topic['level'] as String? ?? 'basics';
-    final accuracy = (topic['accuracy'] as num?)?.toInt() ?? 0;
-    final stars = (topic['stars'] as num?)?.toInt() ?? 0;
-
-    final color = switch (level) {
-      'intermediate' => AppTheme.accentCyan,
-      'advanced' => AppTheme.accentPurple,
-      _ => AppTheme.accentGreen,
-    };
-
-    return GlassContainer(
-      width: 170,
-      borderColor: color.withAlpha(50),
-      padding: const EdgeInsets.all(12),
-      onTap: () => context.push('/lesson', extra: {
-        'customTopic': name,
-        'level': level,
-      }),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            name,
-            style: GoogleFonts.spaceGrotesk(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.textPrimary,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const Spacer(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(6),
-              color: color.withAlpha(20),
-              border: Border.all(color: color.withAlpha(50), width: 0.5),
-            ),
-            child: Text(
-              level.toUpperCase(),
-              style: GoogleFonts.orbitron(
-                fontSize: 8,
-                fontWeight: FontWeight.w700,
-                color: color,
-                letterSpacing: 1,
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              ...List.generate(
-                3,
-                (i) => Icon(
-                  i < stars ? Icons.star : Icons.star_border,
-                  size: 14,
-                  color: i < stars
-                      ? AppTheme.accentGold
-                      : AppTheme.textTertiary,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '$accuracy%',
-                style: GoogleFonts.orbitron(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: accuracy >= 70
-                      ? AppTheme.accentGreen
-                      : AppTheme.accentOrange,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Utility row: Concept Map + Skill Tree ──────────────────────────────────
-
-  Widget _buildUtilityRow() {
-    return Row(
-      children: [
-        Expanded(
-          child: _utilityTile(
-            label: 'Concept Map',
-            icon: Icons.hub_rounded,
-            color: AppTheme.accentPurple,
-            onTap: () => context.push('/concept-map'),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _utilityTile(
-            label: 'Skill Tree',
-            icon: Icons.account_tree_rounded,
-            color: AppTheme.accentGreen,
-            onTap: () => context.push('/skill-tree'),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _utilityTile({
-    required String label,
-    required IconData icon,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return GlassContainer(
-      borderColor: color.withAlpha(50),
-      padding: const EdgeInsets.all(14),
-      onTap: onTap,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: color, size: 22),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: GoogleFonts.orbitron(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: color,
-              letterSpacing: 1,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Shared header ─────────────────────────────────────────────────────────
-
-  Widget _sectionHeader(
-    String title,
-    IconData icon,
-    Color color,
-    String subtitle, {
-    VoidCallback? trailingTap,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, color: color, size: 18),
-            const SizedBox(width: 8),
-            Text(
-              title.toUpperCase(),
-              style: GoogleFonts.orbitron(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: color,
-                letterSpacing: 1.2,
-              ),
-            ),
-            const Spacer(),
-            if (trailingTap != null)
-              GestureDetector(
-                onTap: trailingTap,
-                child: Text(
-                  'See All',
-                  style: GoogleFonts.spaceGrotesk(
-                    fontSize: 11,
-                    color: color.withAlpha(180),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 2),
-        Text(
-          subtitle,
-          style: GoogleFonts.spaceGrotesk(
-            fontSize: 11,
-            color: AppTheme.textTertiary,
-          ),
-        ),
-      ],
-    );
-  }
 
   Widget _pill(String label, Color color) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -1310,144 +769,6 @@ class _HomeDashboardState extends State<HomeDashboard>
           ),
         ),
       );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Style picker bottom sheet
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _StylePickerSheet extends StatefulWidget {
-  const _StylePickerSheet({required this.style});
-  final StoryStyle style;
-
-  @override
-  State<_StylePickerSheet> createState() => _StylePickerSheetState();
-}
-
-class _StylePickerSheetState extends State<_StylePickerSheet> {
-  final _topicCtrl = TextEditingController();
-  final _franchiseCtrl = TextEditingController();
-
-  @override
-  void dispose() {
-    _topicCtrl.dispose();
-    _franchiseCtrl.dispose();
-    super.dispose();
-  }
-
-  void _launch() {
-    final topic = _topicCtrl.text.trim();
-    if (topic.isEmpty) return;
-    Navigator.of(context).pop();
-    context.push('/lesson', extra: {
-      'customTopic': topic,
-      'preselectedStyle': widget.style.promptKey,
-      'franchiseName': _franchiseCtrl.text.trim(),
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final style = widget.style;
-    final needsFranchise = style == StoryStyle.movieTv;
-
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 20,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(style.icon, color: style.color, size: 24),
-              const SizedBox(width: 10),
-              Text(
-                style.label,
-                style: GoogleFonts.orbitron(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            style.description,
-            style: GoogleFonts.spaceGrotesk(
-              fontSize: 12,
-              color: AppTheme.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 20),
-          TextField(
-            controller: _topicCtrl,
-            autofocus: true,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              hintText: 'Topic (e.g. Photosynthesis)',
-              hintStyle: const TextStyle(color: Colors.white30),
-              filled: true,
-              fillColor: Colors.white.withAlpha(15),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: style.color.withAlpha(60)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: style.color.withAlpha(60)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: style.color, width: 1.5),
-              ),
-            ),
-          ),
-          if (needsFranchise) ...[
-            const SizedBox(height: 12),
-            TextField(
-              controller: _franchiseCtrl,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: 'Franchise (e.g. Harry Potter, Naruto)',
-                hintStyle: const TextStyle(color: Colors.white30),
-                filled: true,
-                fillColor: Colors.white.withAlpha(15),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: style.color.withAlpha(60)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: style.color.withAlpha(60)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: style.color, width: 1.5),
-                ),
-              ),
-            ),
-          ],
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: NeonButton(
-              label: 'GENERATE LESSON',
-              icon: Icons.auto_awesome,
-              colors: [style.color, AppTheme.accentCyan],
-              height: 46,
-              onTap: _launch,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _MoodOption {

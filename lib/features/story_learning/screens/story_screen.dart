@@ -17,7 +17,6 @@ import '../../../core/widgets/glass_container.dart';
 import '../../../core/widgets/karaoke_text.dart';
 import '../../../core/widgets/neon_button.dart';
 import '../../../core/widgets/particle_background.dart';
-import '../../courses/data/course_data.dart';
 import '../models/story_response.dart';
 import '../models/story_scene.dart';
 import '../models/story_style.dart';
@@ -28,9 +27,6 @@ enum _Phase { levelSelect, styleSelect, loading, story, quiz, results }
 class StoryScreen extends StatefulWidget {
   const StoryScreen({
     super.key,
-    this.lessonId,
-    this.subjectId,
-    this.chapterId,
     this.customTopic,
     this.preselectedLevel,
     this.preselectedStyle,
@@ -39,9 +35,6 @@ class StoryScreen extends StatefulWidget {
     this.pathStepIndex,
   });
 
-  final String? lessonId;
-  final String? subjectId;
-  final String? chapterId;
   final String? customTopic;
   final String? preselectedLevel;
   final String? preselectedStyle;
@@ -87,9 +80,6 @@ class _StoryScreenState extends State<StoryScreen> {
   bool _showExplanation = false;
 
   String _topic = '';
-  String _chapterTitle = '';
-  Lesson? _lesson;
-  CourseSubject? _subject;
 
   @override
   void initState() {
@@ -237,56 +227,24 @@ class _StoryScreenState extends State<StoryScreen> {
       };
 
   void _initContext() {
-    // Resolve topic + lesson context
     if (widget.customTopic != null && widget.customTopic!.trim().isNotEmpty) {
       _topic = widget.customTopic!.trim();
-    }
-
-    if (widget.subjectId != null) {
-      _subject = CourseData.allCourses
-          .where((c) => c.id == widget.subjectId)
-          .cast<CourseSubject?>()
-          .firstWhere((c) => c != null, orElse: () => null);
-
-      if (_subject != null && widget.chapterId != null) {
-        for (final chapter in _subject!.chapters) {
-          if (chapter.id == widget.chapterId) {
-            _chapterTitle = chapter.title;
-            if (widget.lessonId != null) {
-              for (final lesson in chapter.lessons) {
-                if (lesson.id == widget.lessonId) {
-                  _lesson = lesson;
-                  _topic = lesson.title;
-                  break;
-                }
-              }
-            }
-            break;
-          }
-        }
-      }
     }
 
     if (widget.preselectedStyle != null) {
       _style = StoryStyle.values.firstWhere(
         (s) => s.promptKey == widget.preselectedStyle,
-        orElse: () => StoryStyle.story,
+        orElse: () => StoryStyle.practical,
       );
     }
     _franchise = widget.franchiseName ?? '';
 
-    // Decide starting phase
-    final hasPreselectedLevel = widget.preselectedLevel != null;
-    final isCourseLesson = _lesson != null;
-
-    if (hasPreselectedLevel) {
+    if (widget.preselectedLevel != null) {
       _level = widget.preselectedLevel!;
       _phase = widget.preselectedStyle != null
           ? _Phase.loading
           : _Phase.styleSelect;
       if (_phase == _Phase.loading) _generateStory();
-    } else if (isCourseLesson) {
-      _phase = _Phase.styleSelect;
     } else if (_topic.isNotEmpty) {
       _phase = _Phase.levelSelect;
       _assessLevel();

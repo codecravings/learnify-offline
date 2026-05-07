@@ -10,13 +10,6 @@ import '../features/auth/screens/home_screen.dart';
 import '../features/companion/screens/study_companion_screen.dart';
 import '../features/profile/screens/profile_screen.dart';
 import '../features/story_learning/screens/story_screen.dart';
-import '../features/story_learning/screens/topic_explorer_screen.dart';
-import '../features/story_learning/screens/your_topics_screen.dart';
-import '../features/knowledge_graph/screens/concept_map_screen.dart';
-import '../features/skill_tree/screens/skill_tree_screen.dart';
-import '../features/search/screens/search_screen.dart';
-import '../features/achievements/screens/achievements_screen.dart';
-import '../features/courses/screens/courses_screen.dart';
 import '../features/scan/screens/scan_textbook_screen.dart';
 import '../features/mastery_path/screens/mastery_path_screen.dart';
 
@@ -25,13 +18,6 @@ abstract class AppRoutes {
   static const String setupProfile = '/setup/profile';
   static const String home = '/home';
   static const String lesson = '/lesson';
-  static const String topicExplorer = '/topic-explorer';
-  static const String topics = '/topics';
-  static const String conceptMap = '/concept-map';
-  static const String skillTree = '/skill-tree';
-  static const String search = '/search';
-  static const String achievements = '/achievements';
-  static const String courses = '/courses';
   static const String scan = '/scan';
   static const String masteryPath = '/mastery-path';
   static const String userProfile = '/profile';
@@ -89,15 +75,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ],
       ),
 
-      // ── Learning ──────────────────────────────────────────────────────────
+      // ── Story Learn (custom topic or mastery-path step) ──────────────────
       GoRoute(
         path: AppRoutes.lesson,
         builder: (context, state) {
           final extra = state.extra as Map<String, dynamic>? ?? {};
           return StoryScreen(
-            lessonId: extra['lessonId'] as String?,
-            subjectId: extra['subjectId'] as String?,
-            chapterId: extra['chapterId'] as String?,
             customTopic: extra['customTopic'] as String?,
             preselectedLevel:
                 (extra['preselectedLevel'] ?? extra['level']) as String?,
@@ -108,46 +91,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
-      GoRoute(
-        path: AppRoutes.topicExplorer,
-        builder: (context, state) {
-          final extra = state.extra as Map<String, dynamic>? ?? {};
-          return TopicExplorerScreen(
-            topic: extra['topic'] as String? ?? '',
-          );
-        },
-      ),
-      GoRoute(
-        path: AppRoutes.topics,
-        builder: (_, __) => const YourTopicsScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.conceptMap,
-        builder: (context, state) {
-          final extra = state.extra as Map<String, dynamic>? ?? {};
-          return ConceptMapScreen(
-            focusConcept: extra['focusConcept'] as String?,
-          );
-        },
-      ),
-      GoRoute(
-        path: AppRoutes.skillTree,
-        builder: (_, __) => const SkillTreeScreen(),
-      ),
 
-      // ── Utilities ─────────────────────────────────────────────────────────
-      GoRoute(
-        path: AppRoutes.search,
-        builder: (_, __) => const SearchScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.achievements,
-        builder: (_, __) => const AchievementsScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.courses,
-        builder: (_, __) => const CoursesScreen(),
-      ),
+      // ── Scan / Mastery / Profile ─────────────────────────────────────────
       GoRoute(
         path: AppRoutes.scan,
         builder: (_, __) => const ScanTextbookScreen(),
