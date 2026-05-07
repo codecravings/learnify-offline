@@ -107,3 +107,47 @@ class StoryResponse {
     );
   }
 }
+
+/// Progressive story-chunk shape. The orchestrator yields one [intro] chunk
+/// (title + cast + first scenes) so the UI can paint immediately, then a
+/// [tail] chunk (remaining scenes + quiz). Total wall-time is ~the same as
+/// one big call but time-to-first-paint drops from "minutes" to "seconds".
+enum StoryChunkKind { intro, tail }
+
+class StoryChunk {
+  const StoryChunk._({
+    required this.kind,
+    this.title,
+    this.characters = const [],
+    this.scenes = const [],
+    this.quiz = const [],
+  });
+
+  factory StoryChunk.intro({
+    required String title,
+    required List<FranchiseCharacter> characters,
+    required List<StoryScene> scenes,
+  }) =>
+      StoryChunk._(
+        kind: StoryChunkKind.intro,
+        title: title,
+        characters: characters,
+        scenes: scenes,
+      );
+
+  factory StoryChunk.tail({
+    required List<StoryScene> scenes,
+    required List<StoryQuizQuestion> quiz,
+  }) =>
+      StoryChunk._(
+        kind: StoryChunkKind.tail,
+        scenes: scenes,
+        quiz: quiz,
+      );
+
+  final StoryChunkKind kind;
+  final String? title;
+  final List<FranchiseCharacter> characters;
+  final List<StoryScene> scenes;
+  final List<StoryQuizQuestion> quiz;
+}

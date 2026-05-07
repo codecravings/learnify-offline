@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../../core/ai/gemma_orchestrator.dart';
+import '../../../core/franchises/franchise_loader.dart';
 import '../../../core/services/local_memory_service.dart';
 import '../../../core/services/local_profile_service.dart';
 import '../../../core/services/text_to_speech_service.dart';
@@ -18,7 +19,9 @@ import '../../../core/widgets/neon_button.dart';
 import '../../../core/widgets/particle_background.dart';
 import '../../courses/data/course_data.dart';
 import '../models/story_response.dart';
+import '../models/story_scene.dart';
 import '../models/story_style.dart';
+import '../widgets/franchise_picker_sheet.dart';
 
 enum _Phase { levelSelect, styleSelect, loading, story, quiz, results }
 
@@ -57,15 +60,23 @@ class _StoryScreenState extends State<StoryScreen> {
 
   _Phase _phase = _Phase.levelSelect;
   String _level = 'basics';
-  StoryStyle _style = StoryStyle.story;
+  StoryStyle _style = StoryStyle.practical;
   String _franchise = '';
+  Franchise? _franchiseObj;
 
   Map<String, dynamic>? _levelAssessment;
   bool _assessing = false;
   String _loadingStage = 'Calling Gemma 4 E2B on-device…';
 
   StoryResponse? _story;
-  int _sceneIndex = 0;
+  // Number of scenes the user has revealed so far. Drives the chat-bubble feed.
+  int _revealedSceneCount = 0;
+  // True while the tail-chunk Gemma call is still in flight (so the UI can
+  // show a subtle "writing..." pill if the user reaches the bottom early).
+  bool _isGeneratingMore = false;
+  StreamSubscription<StoryChunk>? _streamSub;
+  final ScrollController _chatScroll = ScrollController();
+
   int _ttsActiveWord = -1;
   String? _ttsActiveDialogue;
   StreamSubscription<int>? _ttsSub;
@@ -88,7 +99,9 @@ class _StoryScreenState extends State<StoryScreen> {
 
   @override
   void dispose() {
+    _streamSub?.cancel();
     _ttsSub?.cancel();
+    _chatScroll.dispose();
     TextToSpeechService.instance.stop();
     super.dispose();
   }
@@ -299,35 +312,93 @@ class _StoryScreenState extends State<StoryScreen> {
   }
 
   Future<void> _generateStory() async {
+    // Movie/TV mode requires a franchise pick. Bounce them back if missing.
+    if (_style == StoryStyle.movieTv && _franchiseObj == null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        backgroundColor: AppTheme.accentMagenta,
+        duration: const Duration(seconds: 2),
+        content: Text(
+          'Pick a franchise first ✨',
+          style: GoogleFonts.spaceGrotesk(color: Colors.white),
+        ),
+      ));
+      return;
+    }
+
     setState(() {
       _phase = _Phase.loading;
       _loadingStage = 'Checking your learning memory…';
+      _story = null;
+      _revealedSceneCount = 0;
+      _isGeneratingMore = true;
     });
 
-    try {
-      await Future.delayed(const Duration(milliseconds: 300));
-      if (mounted) {
-        setState(() =>
-            _loadingStage = 'Gemma 4 E2B is crafting your ${_style.label.toLowerCase()} lesson…');
-      }
+    await _streamSub?.cancel();
 
-      final story = await _orchestrator.generateStory(
-        topic: _topic,
-        style: _style.promptKey,
-        franchiseName: _franchise,
-        level: _level,
+    final stream = _orchestrator.streamStoryChunks(
+      topic: _topic,
+      style: _style.promptKey,
+      franchise: _franchiseObj,
+      franchiseName: _franchise,
+      level: _level,
+    );
+
+    final completer = Completer<void>();
+    _streamSub = stream.listen(
+      (chunk) {
+        if (!mounted) return;
+        if (chunk.kind == StoryChunkKind.intro) {
+          setState(() {
+            _story = StoryResponse(
+              title: chunk.title ?? _topic,
+              scenes: List<StoryScene>.from(chunk.scenes),
+              quiz: const [],
+              franchiseCharacters: chunk.characters,
+            );
+            _revealedSceneCount = 1;
+            _phase = _Phase.story;
+          });
+          _scheduleAutoScroll();
+        } else {
+          // Tail chunk — append remaining scenes + quiz onto the existing story.
+          final prev = _story;
+          if (prev != null) {
+            setState(() {
+              _story = StoryResponse(
+                title: prev.title,
+                scenes: [...prev.scenes, ...chunk.scenes],
+                quiz: chunk.quiz,
+                franchiseCharacters: prev.franchiseCharacters,
+              );
+              _isGeneratingMore = false;
+            });
+          }
+        }
+      },
+      onError: (e) {
+        if (!mounted) return;
+        _isGeneratingMore = false;
+        _showError('Generation failed: $e');
+        if (!completer.isCompleted) completer.complete();
+      },
+      onDone: () {
+        if (mounted) setState(() => _isGeneratingMore = false);
+        if (!completer.isCompleted) completer.complete();
+      },
+    );
+
+    await completer.future;
+  }
+
+  void _scheduleAutoScroll() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_chatScroll.hasClients) return;
+      _chatScroll.animateTo(
+        _chatScroll.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOut,
       );
-
-      if (!mounted) return;
-      setState(() {
-        _story = story;
-        _phase = _Phase.story;
-        _sceneIndex = 0;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      _showError('Generation failed: $e');
-    }
+    });
   }
 
   void _showError(String msg) {
@@ -343,12 +414,28 @@ class _StoryScreenState extends State<StoryScreen> {
     setState(() => _phase = _Phase.styleSelect);
   }
 
-  void _advanceScene() {
+  Future<void> _openFranchisePicker() async {
+    final mood = _profile.currentProfile?.currentMood ?? '';
+    final picked = await showModalBottomSheet<Franchise?>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => FranchisePickerSheet(suggestedMood: mood),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _franchiseObj = picked;
+      _franchise = picked.name;
+    });
+  }
+
+  void _revealNextScene() {
     final story = _story;
     if (story == null) return;
-    if (_sceneIndex < story.scenes.length - 1) {
-      setState(() => _sceneIndex++);
-    } else {
+    if (_revealedSceneCount < story.scenes.length) {
+      setState(() => _revealedSceneCount++);
+      _scheduleAutoScroll();
+    } else if (!_isGeneratingMore && story.quiz.isNotEmpty) {
       setState(() {
         _phase = _Phase.quiz;
         _questionIndex = 0;
@@ -683,7 +770,9 @@ class _StoryScreenState extends State<StoryScreen> {
   // ── STYLE SELECT ───────────────────────────────────────────────────────
 
   Widget _buildStyleSelect() {
-    final styles = StoryStyle.values;
+    // Brief: only two main modes — Practical (friend chat) + Movie/TV (franchise).
+    // Hidden styles still resolve via promptKey for back-compat call sites.
+    const styles = [StoryStyle.practical, StoryStyle.movieTv];
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 60, 20, 40),
       children: [
@@ -716,7 +805,7 @@ class _StoryScreenState extends State<StoryScreen> {
         if (_style == StoryStyle.movieTv) ...[
           const SizedBox(height: 18),
           Text(
-            'FRANCHISE NAME',
+            'FRANCHISE',
             style: GoogleFonts.orbitron(
               fontSize: 10,
               fontWeight: FontWeight.w700,
@@ -725,27 +814,54 @@ class _StoryScreenState extends State<StoryScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          TextField(
-            onChanged: (v) => _franchise = v,
-            controller: TextEditingController(text: _franchise)
-              ..selection = TextSelection.collapsed(offset: _franchise.length),
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              hintText: 'e.g. Harry Potter, Naruto, Stranger Things',
-              hintStyle: const TextStyle(color: Colors.white30),
-              filled: true,
-              fillColor: Colors.white.withAlpha(10),
-              border: OutlineInputBorder(
+          GestureDetector(
+            onTap: _openFranchisePicker,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: _style.color.withAlpha(60)),
+                color: Colors.white.withAlpha(10),
+                border: Border.all(
+                  color: _franchiseObj != null
+                      ? _style.color
+                      : _style.color.withAlpha(60),
+                  width: _franchiseObj != null ? 1.5 : 0.8,
+                ),
               ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: _style.color.withAlpha(60)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: _style.color, width: 1.5),
+              child: Row(
+                children: [
+                  Icon(
+                    _franchiseObj != null
+                        ? Icons.auto_awesome_rounded
+                        : Icons.search_rounded,
+                    color: _style.color,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _franchiseObj?.name ?? 'Pick a franchise…',
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: _franchiseObj != null
+                            ? Colors.white
+                            : Colors.white54,
+                      ),
+                    ),
+                  ),
+                  if (_franchiseObj != null)
+                    Text(
+                      '${_franchiseObj!.characters.length} chars',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Colors.white38,
+                      ),
+                    )
+                  else
+                    const Icon(Icons.chevron_right_rounded,
+                        color: Colors.white54),
+                ],
               ),
             ),
           ),
@@ -852,189 +968,124 @@ class _StoryScreenState extends State<StoryScreen> {
     );
   }
 
-  // ── STORY ──────────────────────────────────────────────────────────────
+  // ── STORY (chat-bubble feed) ──────────────────────────────────────────
 
   Widget _buildStory() {
     final story = _story!;
-    final scene = story.scenes[_sceneIndex];
-    final character = story.getFranchiseCharacter(scene.characterId);
+    final totalKnown = story.scenes.length;
+    final reveal = _revealedSceneCount.clamp(0, totalKnown);
+    final hasMore = reveal < totalKnown;
+    final allRevealed = !hasMore && !_isGeneratingMore && story.quiz.isNotEmpty;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 60, 20, 20),
+    // Header — minimal: title + tiny progress dots.
+    final header = Padding(
+      padding: const EdgeInsets.fromLTRB(20, 56, 20, 8),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Progress bar
           Row(
             children: [
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(2),
-                  child: LinearProgressIndicator(
-                    value: (_sceneIndex + 1) / story.scenes.length,
-                    backgroundColor: Colors.white.withAlpha(10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(6),
+                  color: _style.color.withAlpha(28),
+                  border: Border.all(color: _style.color.withAlpha(80), width: 0.6),
+                ),
+                child: Text(
+                  _franchiseObj != null ? _franchiseObj!.name.toUpperCase() : 'CHAT',
+                  style: GoogleFonts.orbitron(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
                     color: _style.color,
-                    minHeight: 4,
+                    letterSpacing: 1.4,
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  story.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.orbitron(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
               Text(
-                '${_sceneIndex + 1}/${story.scenes.length}',
+                '$reveal/${_isGeneratingMore ? "…" : totalKnown}',
                 style: GoogleFonts.orbitron(
-                  fontSize: 11,
+                  fontSize: 10,
                   fontWeight: FontWeight.w700,
-                  color: _style.color,
+                  color: AppTheme.textTertiary,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          Text(
-            story.title,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.orbitron(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
-          ),
-          const Spacer(),
-          // Character portrait
-          _buildCharacterPortrait(character, scene.emotion),
-          const SizedBox(height: 18),
-          // Dialogue box
-          Expanded(
-            flex: 3,
-            child: GestureDetector(
-              onTap: _advanceScene,
-              child: GlassContainer(
-                borderColor: (character?.color ?? _style.color).withAlpha(80),
-                padding: const EdgeInsets.all(18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (character != null)
-                      Text(
-                        character.name.toUpperCase(),
-                        style: GoogleFonts.orbitron(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: character.color,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                    const SizedBox(height: 6),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (scene.narration != null &&
-                                scene.narration!.isNotEmpty) ...[
-                              Text(
-                                scene.narration!,
-                                style: GoogleFonts.spaceGrotesk(
-                                  fontSize: 12,
-                                  fontStyle: FontStyle.italic,
-                                  color: AppTheme.textTertiary,
-                                  height: 1.4,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                            ],
-                            _buildDialogue(scene.dialogue),
-                            if (_profile.currentProfile?.ttsEnabled ?? false) ...[
-                              const SizedBox(height: 8),
-                              _buildSpeakButton(scene.dialogue),
-                            ],
-                            if (scene.conceptTag != null) ...[
-                              const SizedBox(height: 10),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(6),
-                                  color: _style.color.withAlpha(20),
-                                  border: Border.all(
-                                      color: _style.color.withAlpha(60),
-                                      width: 0.5),
-                                ),
-                                child: Text(
-                                  '# ${scene.conceptTag}',
-                                  style: GoogleFonts.orbitron(
-                                    fontSize: 9,
-                                    color: _style.color,
-                                    letterSpacing: 1,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Text(
-                          _sceneIndex == story.scenes.length - 1
-                              ? 'Tap for quiz'
-                              : 'Tap to continue',
-                          style: GoogleFonts.spaceGrotesk(
-                            fontSize: 10,
-                            color: AppTheme.textTertiary,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Icon(
-                          Icons.arrow_forward_rounded,
-                          size: 14,
-                          color: _style.color.withAlpha(180),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
         ],
       ),
     );
-  }
 
-  Widget _buildCharacterPortrait(FranchiseCharacter? char, String emotion) {
-    final color = char?.color ?? _style.color;
-    final initial =
-        (char?.name.isNotEmpty ?? false) ? char!.name[0].toUpperCase() : '?';
+    // Chat list — one bubble per revealed scene.
+    final chat = Expanded(
+      child: ListView.builder(
+        controller: _chatScroll,
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        itemCount: reveal,
+        itemBuilder: (_, i) {
+          final scene = story.scenes[i];
+          final character = story.getFranchiseCharacter(scene.characterId);
+          // Alternate alignment by character id so the chat reads like a real
+          // group chat instead of a single column of bubbles.
+          final castIds = story.franchiseCharacters.map((c) => c.id).toList();
+          final idx = castIds.indexOf(scene.characterId);
+          final alignRight = idx == 0; // first character = "you", on the right.
+          return _ChatBubble(
+            scene: scene,
+            character: character,
+            styleColor: _style.color,
+            alignRight: alignRight,
+            dialogueBuilder: (text) => _buildDialogue(text),
+            speakButton: (_profile.currentProfile?.ttsEnabled ?? false)
+                ? _buildSpeakButton(scene.dialogue)
+                : null,
+          )
+              .animate(key: ValueKey('bubble-$i'))
+              .fadeIn(duration: 280.ms)
+              .slideY(begin: 0.15, end: 0, duration: 320.ms, curve: Curves.easeOut);
+        },
+      ),
+    );
 
-    return Container(
-      width: 96,
-      height: 96,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(
-          colors: [color, color.withAlpha(120)],
+    // Bottom CTA — single big tap target.
+    Widget cta;
+    if (allRevealed) {
+      cta = NeonButton(
+        label: 'ONE LAST CHECK',
+        icon: Icons.quiz_rounded,
+        colors: [AppTheme.accentCyan, _style.color],
+        onTap: _revealNextScene,
+      );
+    } else if (hasMore) {
+      cta = _TapToContinuePill(color: _style.color, onTap: _revealNextScene);
+    } else {
+      // No more scenes loaded but tail still in flight.
+      cta = const _WritingPill();
+    }
+
+    return Column(
+      children: [
+        header,
+        chat,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 6, 20, 18),
+          child: cta,
         ),
-        boxShadow: [
-          BoxShadow(color: color.withAlpha(120), blurRadius: 24, spreadRadius: 2),
-        ],
-      ),
-      child: Center(
-        child: Text(
-          initial,
-          style: GoogleFonts.orbitron(
-            fontSize: 36,
-            fontWeight: FontWeight.w900,
-            color: Colors.white,
-          ),
-        ),
-      ),
-    ).animate(key: ValueKey(_sceneIndex)).scale(
-          begin: const Offset(0.85, 0.85),
-          end: const Offset(1.0, 1.0),
-          duration: 300.ms,
-        );
+      ],
+    );
   }
 
   // ── QUIZ ───────────────────────────────────────────────────────────────
@@ -1325,7 +1376,7 @@ class _StoryScreenState extends State<StoryScreen> {
             setState(() {
               _phase = _Phase.styleSelect;
               _story = null;
-              _sceneIndex = 0;
+              _revealedSceneCount = 0;
               _correctCount = 0;
               _missedQuestions.clear();
             });
@@ -1361,6 +1412,247 @@ class _StoryScreenState extends State<StoryScreen> {
             label,
             style: GoogleFonts.spaceGrotesk(
               fontSize: 9,
+              color: AppTheme.textTertiary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Chat-bubble helpers ─────────────────────────────────────────────────
+
+class _ChatBubble extends StatelessWidget {
+  const _ChatBubble({
+    required this.scene,
+    required this.character,
+    required this.styleColor,
+    required this.alignRight,
+    required this.dialogueBuilder,
+    this.speakButton,
+  });
+
+  final StoryScene scene;
+  final FranchiseCharacter? character;
+  final Color styleColor;
+  final bool alignRight;
+  final Widget Function(String) dialogueBuilder;
+  final Widget? speakButton;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = character?.color ?? styleColor;
+    final initial =
+        (character?.name.isNotEmpty ?? false) ? character!.name[0].toUpperCase() : '?';
+    final name = character?.name ?? scene.characterId;
+
+    final avatar = Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(colors: [color, color.withAlpha(120)]),
+        boxShadow: [BoxShadow(color: color.withAlpha(80), blurRadius: 10)],
+      ),
+      child: Center(
+        child: Text(
+          initial,
+          style: GoogleFonts.orbitron(
+            fontSize: 13,
+            fontWeight: FontWeight.w900,
+            color: Colors.white,
+          ),
+        ),
+      ),
+    );
+
+    final bubble = Container(
+      constraints: BoxConstraints(
+        maxWidth: MediaQuery.of(context).size.width * 0.72,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.only(
+          topLeft: const Radius.circular(16),
+          topRight: const Radius.circular(16),
+          bottomLeft: Radius.circular(alignRight ? 16 : 4),
+          bottomRight: Radius.circular(alignRight ? 4 : 16),
+        ),
+        color: color.withAlpha(28),
+        border: Border.all(color: color.withAlpha(95), width: 0.7),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          dialogueBuilder(scene.dialogue),
+          if (speakButton != null) ...[
+            const SizedBox(height: 6),
+            speakButton!,
+          ],
+        ],
+      ),
+    );
+
+    final namePlate = Padding(
+      padding: const EdgeInsets.only(left: 4, right: 4, bottom: 3),
+      child: Row(
+        mainAxisAlignment:
+            alignRight ? MainAxisAlignment.end : MainAxisAlignment.start,
+        children: [
+          Text(
+            name,
+            style: GoogleFonts.orbitron(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: color,
+              letterSpacing: 1,
+            ),
+          ),
+          if (scene.emotion.isNotEmpty && scene.emotion != 'neutral') ...[
+            const SizedBox(width: 6),
+            Text(
+              '· ${scene.emotion}',
+              style: GoogleFonts.spaceGrotesk(
+                fontSize: 10,
+                color: AppTheme.textTertiary,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+
+    final body = Column(
+      crossAxisAlignment:
+          alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        if (scene.narration != null && scene.narration!.trim().isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            child: Text(
+              scene.narration!,
+              style: GoogleFonts.spaceGrotesk(
+                fontSize: 11,
+                fontStyle: FontStyle.italic,
+                color: AppTheme.textTertiary,
+                height: 1.4,
+              ),
+              textAlign: alignRight ? TextAlign.right : TextAlign.left,
+            ),
+          ),
+        ],
+        namePlate,
+        Row(
+          mainAxisAlignment:
+              alignRight ? MainAxisAlignment.end : MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: alignRight
+              ? [
+                  Flexible(child: bubble),
+                  const SizedBox(width: 8),
+                  avatar,
+                ]
+              : [
+                  avatar,
+                  const SizedBox(width: 8),
+                  Flexible(child: bubble),
+                ],
+        ),
+        if (scene.conceptTag != null && scene.conceptTag!.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              '# ${scene.conceptTag}',
+              style: GoogleFonts.orbitron(
+                fontSize: 8,
+                color: styleColor.withAlpha(160),
+                letterSpacing: 1,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: body,
+    );
+  }
+}
+
+class _TapToContinuePill extends StatelessWidget {
+  const _TapToContinuePill({required this.color, required this.onTap});
+
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          color: color.withAlpha(22),
+          border: Border.all(color: color.withAlpha(110), width: 0.8),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'TAP FOR NEXT',
+              style: GoogleFonts.orbitron(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: color,
+                letterSpacing: 1.4,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(Icons.arrow_downward_rounded, size: 14, color: color),
+          ],
+        ),
+      ).animate(onPlay: (c) => c.repeat()).shimmer(
+            duration: 1800.ms,
+            color: color.withAlpha(60),
+          ),
+    );
+  }
+}
+
+class _WritingPill extends StatelessWidget {
+  const _WritingPill();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        color: Colors.white.withAlpha(10),
+        border: Border.all(color: Colors.white24, width: 0.6),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(
+            width: 10,
+            height: 10,
+            child: CircularProgressIndicator(
+              strokeWidth: 1.6,
+              color: AppTheme.accentCyan,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'gemma is writing the rest…',
+            style: GoogleFonts.spaceGrotesk(
+              fontSize: 11,
               color: AppTheme.textTertiary,
             ),
           ),
