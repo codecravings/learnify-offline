@@ -135,24 +135,44 @@ Your learning belongs to **you** ❤️
 # 🚀 Build & Run
 
 ```bash
+# Deps
 flutter pub get
+
+# Code generation (Riverpod / Freezed / JSON)
+dart run build_runner build --delete-conflicting-outputs
+
+# Run on a connected device
 flutter devices
 flutter run -d <DEVICE_ID>
+
+# Optional: pass a Hugging Face token for in-app download
+flutter run -d <DEVICE_ID> --dart-define=HF_TOKEN=<token>
+```
+
+### 📦 Sideload the model (no token needed)
+
+```bash
+# Once you have gemma-4-E2B-it.litertlm locally:
+adb push gemma-4-E2B-it.litertlm \
+  /storage/emulated/0/Android/data/com.vidyasetu.vidyasetu/files/
+
+# Then on first launch tap "Import from device".
 ```
 
 ### 📱 Device Requirements
 
-✅ Android 12+
-✅ 4GB+ RAM
-✅ ~3GB free storage
+✅ Android 12+ (`minSdk = 31`, hard requirement for LiteRT-LM)
+✅ ≥ 6 GB RAM
+✅ ≥ 5 GB free storage (model is ~2.58 GB + temp copy during install)
 
 ---
 
 # 🎉 First Launch Experience
 
-1️⃣ Enter name + grade + language
-2️⃣ One-time Gemma model download (~2.58 GB)
-3️⃣ Done forever ✅
+1️⃣ Pick a model: download (~2.58 GB) or sideload from device
+2️⃣ Enter name + grade + language
+3️⃣ Optionally toggle dyslexia-friendly mode + read-aloud
+4️⃣ Done forever ✅
 
 After that:
 
@@ -161,6 +181,14 @@ After that:
 🌍 Go anywhere
 
 **Learnify still works perfectly.**
+
+### Try this demo path
+
+1. **Mood check** → tap *Curious*
+2. **Learn Anything** → type *"why the sky is blue"*
+3. **Movie / TV** → pick a franchise that matches your mood
+4. **Watch the chat** unfold scene by scene
+5. **Ace the quiz** → unlock **TEACH ${CHARACTER}** and flip the table
 
 ---
 
@@ -239,4 +267,4 @@ Built on Gemma, subject to Gemma Terms of Use.
 
 # ⭐ Final Line
 
-> **The future of education should fit in your pocket — and work anywhere.** 📱🌍✨
+> **The future of education should fit in your pocket — and feel like a friend.** 📱❤️✨
