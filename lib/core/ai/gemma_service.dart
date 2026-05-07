@@ -28,7 +28,13 @@ class GemmaService {
   /// across calls forces flutter_gemma to rebuild the InferenceModel, which
   /// is fragile on-device and surfaces as "unable to load model" after a few
   /// requests. Keep this fixed and bigger than any single response we expect.
-  static const int _textMaxTokens = 8192;
+  ///
+  /// Lowered from 8192 → 4096: at 8192 the LiteRT-LM JNI was segfaulting
+  /// mid-generation on 6 GB devices (`Java_com_google_ai_edge_litertlm_
+  /// LiteRtLmJni_nativeSendMessage` SIGSEGV). 4096 halves the KV-cache
+  /// buffer pressure and is still ≫ anything we ever generate (the
+  /// chat-bubble Story chunks are ~200–300 tokens each).
+  static const int _textMaxTokens = 4096;
 
   /// Call once at app startup before any other API.
   Future<void> bootstrap() async {

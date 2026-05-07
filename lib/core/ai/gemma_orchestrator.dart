@@ -351,9 +351,12 @@ You are about to receive a turn instruction telling you what to do next. Follow 
   // ── STORY HELPERS ──────────────────────────────────────────────────────────
 
   /// Build the locked cast from a franchise (or a small generic ensemble).
-  /// Capped at 3 characters — small model + chat energy = tight cast.
+  /// Capped at 2 characters — small E2B model + chat energy = tight two-person
+  /// dialogue. Was 3 originally, dropped after a LiteRT-LM segfault tied to
+  /// long franchise-persona prompts (each extra cast member roughly doubles
+  /// the cast description block + persona-style block).
   List<FranchiseCharacter> _buildStoryCast(Franchise? franchise) {
-    const palette = ['#3B82F6', '#EF4444', '#22C55E', '#F59E0B', '#8B5CF6'];
+    const palette = ['#3B82F6', '#22C55E', '#EF4444', '#F59E0B', '#8B5CF6'];
     if (franchise == null) {
       return const [
         FranchiseCharacter(
@@ -366,15 +369,10 @@ You are about to receive a turn instruction telling you what to do next. Follow 
             name: 'Arjun',
             role: 'the friend who explains it through daily life',
             colorHex: '#22C55E'),
-        FranchiseCharacter(
-            id: 'skeptic',
-            name: 'Mei',
-            role: 'pushes back, asks the wait-what questions',
-            colorHex: '#EF4444'),
       ];
     }
     final out = <FranchiseCharacter>[];
-    final chars = franchise.characters.take(3).toList();
+    final chars = franchise.characters.take(2).toList();
     for (var i = 0; i < chars.length; i++) {
       final c = chars[i];
       out.add(FranchiseCharacter(
@@ -395,26 +393,16 @@ You are about to receive a turn instruction telling you what to do next. Follow 
     return cleaned.isEmpty ? fallback : cleaned;
   }
 
+  /// Plain id → name mapping for the prompt. When a franchise is set, voice
+  /// and vibe details live in `_franchisePersonaBlock` — keeping them here too
+  /// duplicates ~200 tokens of styling and was a contributing factor to the
+  /// LiteRT-LM mid-generation OOM. So this stays minimal in either branch.
   String _castDescriptionForPrompt(
     Franchise? franchise,
     List<FranchiseCharacter> cast,
   ) {
-    if (franchise == null) {
-      final lines = cast.map((c) => '- id "${c.id}" — ${c.name} (${c.role})');
-      return 'Cast (use these ids in characterId):\n${lines.join('\n')}';
-    }
-    final byName = {for (final p in franchise.characters) p.name: p};
-    final buf = StringBuffer('Cast (refer to them by id only):');
-    for (final c in cast) {
-      final p = byName[c.name];
-      buf.writeln();
-      buf.writeln('- id "${c.id}" — ${c.name} (${c.role})');
-      if (p != null) {
-        buf.writeln('  voice: ${p.speechStyle}');
-        buf.writeln('  vibe: ${p.traits.take(3).join(', ')}');
-      }
-    }
-    return buf.toString();
+    final lines = cast.map((c) => '- id "${c.id}" — ${c.name} (${c.role})');
+    return 'Cast (use these ids in characterId):\n${lines.join('\n')}';
   }
 
   /// Coerce any characterId in [scenes] that doesn't match the locked cast

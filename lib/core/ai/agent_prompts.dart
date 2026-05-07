@@ -112,10 +112,12 @@ $personaBlock
   }
 
   /// Per-character persona block — voice + vibe lines straight from the dataset.
-  /// Kept lean (top 3 chars only, top 1 sample dialogue) to save token budget.
+  /// Kept lean (top 2 chars only, top 1 sample dialogue) to save token budget.
+  /// Aligns with the 2-character cast in [GemmaOrchestrator._buildStoryCast];
+  /// dropping a 3rd persona was part of the LiteRT-LM OOM mitigation.
   static String _franchisePersonaBlock(Franchise f) {
     final buf = StringBuffer('### Persona reference (use the voice, NOT the names — names are in the cast block above)');
-    for (final c in f.characters.take(3)) {
+    for (final c in f.characters.take(2)) {
       final sample = c.sampleDialogues.isNotEmpty ? c.sampleDialogues.first : '';
       buf
         ..writeln()
