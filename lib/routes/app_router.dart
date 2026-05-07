@@ -10,14 +10,17 @@ import '../features/auth/screens/home_screen.dart';
 import '../features/companion/screens/study_companion_screen.dart';
 import '../features/profile/screens/profile_screen.dart';
 import '../features/story_learning/screens/story_screen.dart';
+import '../features/story_learning/screens/feynman_screen.dart';
 import '../features/scan/screens/scan_textbook_screen.dart';
 import '../features/mastery_path/screens/mastery_path_screen.dart';
+import '../core/franchises/franchise_loader.dart';
 
 abstract class AppRoutes {
   static const String setup = '/setup';
   static const String setupProfile = '/setup/profile';
   static const String home = '/home';
   static const String lesson = '/lesson';
+  static const String feynman = '/feynman';
   static const String scan = '/scan';
   static const String masteryPath = '/mastery-path';
   static const String userProfile = '/profile';
@@ -88,6 +91,32 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             franchiseName: extra['franchiseName'] as String?,
             pathTopicKey: extra['pathTopicKey'] as String?,
             pathStepIndex: extra['pathStepIndex'] as int?,
+          );
+        },
+      ),
+
+      // ── Feynman "Teach it back" mode ─────────────────────────────────────
+      GoRoute(
+        path: AppRoutes.feynman,
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? {};
+          final topic = extra['topic'] as String? ?? '';
+          final franchise = extra['franchise'] as Franchise?;
+          final character = extra['character'] as FranchisePersona?;
+          if (franchise == null || character == null || topic.isEmpty) {
+            return const Scaffold(
+              body: Center(
+                child: Text(
+                  'Feynman session needs a franchise + character.',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              ),
+            );
+          }
+          return FeynmanScreen(
+            topic: topic,
+            franchise: franchise,
+            character: character,
           );
         },
       ),

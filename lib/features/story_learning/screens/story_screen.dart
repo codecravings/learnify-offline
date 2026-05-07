@@ -17,6 +17,7 @@ import '../../../core/widgets/glass_container.dart';
 import '../../../core/widgets/karaoke_text.dart';
 import '../../../core/widgets/neon_button.dart';
 import '../../../core/widgets/particle_background.dart';
+import '../../../routes/app_router.dart';
 import '../models/story_response.dart';
 import '../models/story_scene.dart';
 import '../models/story_style.dart';
@@ -1236,6 +1237,12 @@ class _StoryScreenState extends State<StoryScreen> {
     final stars = accuracy >= 90 ? 3 : accuracy >= 70 ? 2 : 1;
     final xp = 35 + (accuracy == 100 ? 15 : 0);
 
+    // Feynman gate: strong score + a real franchise was used + non-beginner.
+    final canTeach = accuracy >= 70 &&
+        _franchiseObj != null &&
+        _franchiseObj!.characters.isNotEmpty &&
+        _level != 'basics';
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 80, 20, 40),
       children: [
@@ -1323,11 +1330,31 @@ class _StoryScreenState extends State<StoryScreen> {
           ],
         ),
         const SizedBox(height: 30),
-        NeonButton(
-          label: 'CONTINUE',
-          icon: Icons.check_rounded,
-          onTap: () => context.pop(),
-        ),
+        if (canTeach) ...[
+          NeonButton(
+            label: 'TEACH ${_franchiseObj!.characters.first.name.toUpperCase()}',
+            icon: Icons.school_rounded,
+            colors: const [AppTheme.accentPurple, AppTheme.accentMagenta],
+            onTap: () {
+              context.push(AppRoutes.feynman, extra: {
+                'topic': _topic,
+                'franchise': _franchiseObj,
+                'character': _franchiseObj!.characters.first,
+              });
+            },
+          ),
+          const SizedBox(height: 10),
+          NeonButton(
+            label: 'DONE',
+            icon: Icons.check_rounded,
+            onTap: () => context.pop(),
+          ),
+        ] else
+          NeonButton(
+            label: 'CONTINUE',
+            icon: Icons.check_rounded,
+            onTap: () => context.pop(),
+          ),
         const SizedBox(height: 10),
         TextButton(
           onPressed: () {

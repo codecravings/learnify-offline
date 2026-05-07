@@ -139,6 +139,32 @@ class LocalMemoryService {
     });
   }
 
+  /// Stores the outcome of a Feynman role-reversal session — the kid
+  /// successfully taught a topic to a franchise character. The Companion
+  /// reads this back as "you taught X to Y" in future replies.
+  Future<void> retainFeynmanSession({
+    required String topic,
+    required String franchiseName,
+    required String characterName,
+    required int stars,
+  }) async {
+    final pid = _pid;
+    if (pid == null) return;
+    await _db.insertMemoryEvent(pid, {
+      'type': 'feynman_taught',
+      'content':
+          'Student taught "$topic" to $characterName ($franchiseName) — earned $stars/3 stars.',
+      'topic': topic,
+      'tags': AppDatabase.encodeList([
+        'topic:${_sanitizeKey(topic)}',
+        'franchise:${_sanitizeKey(franchiseName)}',
+        'feynman',
+        'stars:$stars',
+      ]),
+      'timestamp': DateTime.now().toIso8601String(),
+    });
+  }
+
   // ── RECALL (used to build context for Gemma prompts) ─────────────────────────
 
   /// Returns a formatted context string about a topic — injected into Gemma prompts.
