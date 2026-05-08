@@ -220,20 +220,31 @@ class GemmaOrchestrator {
     required String topic,
     required String level,
   }) async {
-    final raw = await _gemma.generate(
-      systemPrompt: AgentPrompts.storyQuiz(
-        topic: topic,
-        level: level,
-        language: _lang,
-      ),
-      userPrompt: 'Output the JSON now.',
-    );
-    try {
-      final parsed = _parseJson(raw);
-      return _parseQuiz(parsed['quiz']);
-    } catch (_) {
-      return const [];
+    Future<List<StoryQuizQuestion>?> attempt() async {
+      try {
+        final raw = await _gemma.generate(
+          systemPrompt: AgentPrompts.storyQuiz(
+            topic: topic,
+            level: level,
+            language: _lang,
+          ),
+          userPrompt: 'Output the JSON now.',
+        );
+        final parsed = _parseJson(raw);
+        final qs = _parseQuiz(parsed['quiz']);
+        return qs.isEmpty ? null : qs;
+      } catch (e) {
+        debugPrint('[Quiz] attempt failed: $e');
+        return null;
+      }
     }
+
+    // Quiz JSON is short but the small model occasionally drops a brace and
+    // _parseJson returns an empty map. Retry once before giving up.
+    final first = await attempt();
+    if (first != null) return first;
+    final second = await attempt();
+    return second ?? const [];
   }
 
   String _quickTitle(String topic, Franchise? f) {
