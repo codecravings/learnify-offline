@@ -817,12 +817,39 @@ class _StoryScreenState extends State<StoryScreen> {
           ),
         ),
         const SizedBox(height: 4),
-        Text(
-          'Gemma will tell the story your way. Switch anytime.',
-          style: GoogleFonts.spaceGrotesk(
-            fontSize: 12,
-            color: AppTheme.textSecondary,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Gemma will tell the story your way. Switch anytime.',
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 12,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            ),
+            // Level reminder so the user can see what they picked above
+            // without having to back-navigate.
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(6),
+                color: AppTheme.accentCyan.withAlpha(28),
+                border: Border.all(
+                    color: AppTheme.accentCyan.withAlpha(80), width: 0.6),
+              ),
+              child: Text(
+                _level.toUpperCase(),
+                style: GoogleFonts.orbitron(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.accentCyan,
+                  letterSpacing: 1.4,
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 24),
         GridView.count(
