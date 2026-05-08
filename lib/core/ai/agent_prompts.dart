@@ -23,6 +23,7 @@ abstract class AgentPrompts {
     required String topic,
     required String level,
     required String mode,
+    required List<String> castNames,
     required String castSummary,
     required Franchise? franchise,
     required String language,
@@ -36,24 +37,39 @@ abstract class AgentPrompts {
     final moodLine = _moodOneLiner(mood);
     final a11yLine = dyslexic ? '\nA11Y: max 12-word lines, common words only.' : '';
 
+    // Build an explicit speaker order so the model alternates instead of
+    // monologuing as the first character. With ≥2 cast members we ABAB it;
+    // with only 1 we let it be (rare — generic cast always has 2).
+    final names = castNames.isEmpty ? ['A', 'B'] : castNames;
+    final n0 = names[0];
+    final n1 = names.length > 1 ? names[1] : names[0];
+    final order = [n0, n1, n0, n1, n0, n1];
+    final orderBlock = [
+      for (var i = 0; i < 6; i++) 'Line ${i + 1}: ${order[i]}|',
+    ].join('\n');
+
     return '''
 You write a 6-message group chat that teaches $topic to a $level learner.
 Language: $language.
 $modeBlock
 Cast: $castSummary$moodLine$a11yLine
 
-Output EXACTLY 6 lines. Each line is ONE chat message in this format:
+Output EXACTLY 6 lines, ALTERNATING speakers. Each line is ONE chat message in this format:
 Name|emotion|dialogue
 
+Speaker order — start each line with EXACTLY this prefix:
+$orderBlock
+
 Rules:
-- "Name" must match a cast name above. No new characters.
+- NEVER two consecutive lines from the same speaker.
+- "Name" must match the prefix above for that line. No new characters.
 - "emotion" is one word: curious, hyped, chill, confused, surprised, amused, smug, sad.
 - "dialogue" ≤ 18 words. Texting tone. One optional emoji where natural.
-- Build a real conversation: question → answer → reaction → clarify → punchline → "ohhh I get it".
+- Build a real conversation: ${order[0]} asks → ${order[1]} answers → ${order[0]} reacts → ${order[1]} clarifies → ${order[0]} pushes → ${order[1]} lands the "ohhh" moment.
 - NO JSON, NO bullet points, NO preamble. Just the 6 lines.
 - After the 6th line, output "[END]" on its own line.
 
-Example shape (different topic):
+Example shape (different topic, generic names):
 Riya|curious|bro why do bikes skid in the rain?
 Arjun|chill|less friction between tire and road
 Riya|surprised|wait so friction is actually GOOD??

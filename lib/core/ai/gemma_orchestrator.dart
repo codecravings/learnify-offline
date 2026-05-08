@@ -108,6 +108,7 @@ class GemmaOrchestrator {
       topic: topic,
       level: level,
       mode: mode,
+      castNames: castNames,
       castSummary: castSummary,
       franchise: f,
       language: _lang,
