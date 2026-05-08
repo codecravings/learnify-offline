@@ -145,7 +145,7 @@ class GemmaOrchestrator {
         if (line.isEmpty) continue;
         if (line.toUpperCase().contains('[END]')) break;
 
-        final scene = _parsePipeLine(line, cast);
+        final scene = _parsePipeLine(line, cast, sceneIndex: scenes.length);
         if (scene != null) {
           scenes.add(scene);
           yield StoryChunk.tail(scenes: [scene], quiz: const []);
@@ -158,7 +158,7 @@ class GemmaOrchestrator {
     // Flush any unterminated final line.
     final tail = buffer.toString().trim();
     if (scenes.length < 6 && tail.isNotEmpty && !tail.toUpperCase().contains('[END]')) {
-      final scene = _parsePipeLine(tail, cast);
+      final scene = _parsePipeLine(tail, cast, sceneIndex: scenes.length);
       if (scene != null) {
         scenes.add(scene);
         yield StoryChunk.tail(scenes: [scene], quiz: const []);
@@ -172,35 +172,29 @@ class GemmaOrchestrator {
 
   /// One scene parsed from a `Name|emotion|dialogue` line. Returns null on
   /// malformed lines (model preamble, partial output) so the caller can skip.
-  StoryScene? _parsePipeLine(String line, List<FranchiseCharacter> cast) {
-    // Strip leading bullet/quote junk.
+  ///
+  /// `sceneIndex` deterministically picks the speaker as
+  /// `cast[sceneIndex % cast.length]`. The small E2B model frequently
+  /// monologues as the first cast member even when prompted to alternate,
+  /// so we ignore whatever name it writes and enforce ABAB in code.
+  StoryScene? _parsePipeLine(
+    String line,
+    List<FranchiseCharacter> cast, {
+    required int sceneIndex,
+  }) {
     var l = line.replaceAll(RegExp(r'^["\-•\d.\s]+'), '').trim();
     if (l.isEmpty) return null;
     final parts = l.split('|');
     if (parts.length < 3) return null;
 
-    final rawName = parts[0].trim();
     final emotion = parts[1].trim();
     final dialogue = parts.sublist(2).join('|').trim();
     if (dialogue.isEmpty) return null;
 
-    // Match name to cast (case-insensitive, fuzzy contains).
-    FranchiseCharacter? hit;
-    final lname = rawName.toLowerCase();
-    for (final c in cast) {
-      if (c.name.toLowerCase() == lname) {
-        hit = c;
-        break;
-      }
-    }
-    hit ??= cast.firstWhere(
-      (c) => lname.contains(c.name.toLowerCase()) ||
-          c.name.toLowerCase().contains(lname),
-      orElse: () => cast.first,
-    );
+    final speaker = cast[sceneIndex % cast.length];
 
     return StoryScene(
-      characterId: hit.id,
+      characterId: speaker.id,
       emotion: emotion.isEmpty ? 'neutral' : emotion,
       dialogue: dialogue,
     );
