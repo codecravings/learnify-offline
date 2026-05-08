@@ -927,7 +927,9 @@ class _StoryScreenState extends State<StoryScreen> {
         ],
         const SizedBox(height: 24),
         NeonButton(
-          label: 'GENERATE LESSON',
+          label: _style == StoryStyle.movieTv && _franchiseObj == null
+              ? 'PICK A FRANCHISE FIRST'
+              : 'START THE CHAT',
           icon: Icons.auto_awesome,
           colors: [_style.color, AppTheme.accentCyan],
           onTap: _generateStory,
