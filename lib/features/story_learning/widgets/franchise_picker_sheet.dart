@@ -75,10 +75,10 @@ class _FranchisePickerSheetState extends State<FranchisePickerSheet> {
     for (final f in list) {
       var best = 0;
       for (final c in f.characters) {
-        final blob = (c.emotionalStyle + ' ' + c.speechStyle +
-                ' ' + c.humorStyle + ' ' + c.teachingStyle +
-                ' ' + c.traits.join(' '))
-            .toLowerCase();
+        final blob =
+            '${c.emotionalStyle} ${c.speechStyle} ${c.humorStyle} '
+                    '${c.teachingStyle} ${c.traits.join(' ')}'
+                .toLowerCase();
         var score = 0;
         for (final kw in keywords) {
           if (blob.contains(kw)) score++;
