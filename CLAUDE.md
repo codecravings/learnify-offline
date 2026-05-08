@@ -172,34 +172,31 @@ Custom-topic input pushes straight to `/lesson` with the topic. There is **no** 
 
 ### Story Learning — chat-bubble flow (`features/story_learning/screens/story_screen.dart`)
 
-The story reads like a **WhatsApp / group chat**, not a visual novel. Each scene = one chat message. Locked 3-character cast is built **in Dart** (not Gemma) — Gemma cannot invent new characters because it never gets the option.
+The story reads like a **WhatsApp / group chat**, not a visual novel. Each scene = one chat message. Locked 2-character cast is built **in Dart** (not Gemma) — Gemma cannot invent new characters because it never gets the option.
 
 Six phases (`_Phase` enum):
 
-1. **LEVEL_SELECT** — custom topics only. `GemmaOrchestrator.assessTopicLevel` returns `{level, reason, has_history, past_accuracy}` from the Learner Twin agent over local history.
-2. **STYLE_SELECT** — only **two** modes visible: **Practical** (friend group chat with daily-life examples) and **Movie / TV** (franchise persona-driven). Movie/TV requires picking a franchise via `FranchisePickerSheet`.
+1. **LEVEL_SELECT** — custom topics only. `GemmaOrchestrator.assessTopicLevel` returns `{level, reason, has_history, past_accuracy}` from the Learner Twin agent over local history. Each level card shows its mastery-path step count (4 / 7 / 11) so the user sees the depth tradeoff up front.
+2. **STYLE_SELECT** — only **two** modes visible: **Practical** (friend group chat with daily-life examples) and **Movie / TV** (franchise persona-driven). Movie/TV requires picking a franchise via `FranchisePickerSheet`. The selected level is shown as a small caps pill in the subtitle row.
 3. **LOADING** — Gemma orb + status text.
 4. **STORY** — vertical chat feed:
    - `_ChatBubble` (in `story_screen.dart`): left/right alignment by character (first char = right, others = left), avatar + name plate + emotion pill, character-color tinted bubble.
-   - `_TapToContinuePill` reveals the next scene; `_WritingPill` shows when the tail Gemma call is still in flight.
+   - Scenes auto-reveal on a 1.3 s `Timer.periodic` cadence with a `_WritingPill` ("gemma is typing…") between bubbles. The first scene gets a 600 ms grace so the typing pill is visible at least once. Reveal is decoupled from generation so latency variance is hidden behind the typing pill.
    - BionicText / KaraokeText / TTS still work inside bubbles.
 5. **QUIZ** — 3 questions × 4 options. Tracks `_correctCount` and `_missedQuestions`.
 6. **RESULTS** — 1–3 stars, XP (35 base + 15 perfect bonus), saves via `retainQuizResult` (awards XP, upserts topic progress, advances mastery path step). When `accuracy ≥ 70` AND `_franchiseObj != null` AND `_level != 'basics'`, the primary CTA becomes **"TEACH ${CHARACTER}"** → `/feynman`.
 
-#### Progressive generation (the small-model fix)
+#### Streaming + parser-enforced alternation (the small-model fixes)
 
-`GemmaOrchestrator.streamStoryChunks` splits the story into two Gemma calls:
+`GemmaOrchestrator.streamStoryChunks` runs the chat as a single streaming call (no separate intro/tail any more). Tokens are buffered, split on newlines, and each `Name|emotion|dialogue` line is parsed into a `StoryScene` and yielded as a tail chunk. The 6-line ABAB speaker order is enforced **in the parser** — `_parsePipeLine` ignores whatever name the model wrote and assigns `cast[sceneIndex % cast.length]`. The small E2B model frequently monologues as cast[0] otherwise.
 
-- **Intro chunk:** title + first 4 scenes. Yielded as soon as it parses, so the chat feed paints within seconds.
-- **Tail chunk:** remaining 2 scenes + 3 quiz questions. Arrives while the user is reading scene 1.
-
-The user sees something within seconds instead of waiting on a single ~3-minute call. Time-to-first-paint is the single biggest UX lever on a small on-device model.
+Quiz is a separate small JSON `generate()` call after the stream closes; it retries once on parse failure (small models drop a brace ~25% of the time). If the chat stream produces zero parseable scenes, the orchestrator throws and `StoryScreen.onError` resets to style-select with a snackbar — no more frozen typing pill.
 
 #### Franchise persona (when Movie/TV is picked)
 
-`AgentPrompts._franchisePersonaBlock(franchise)` injects the top 3 characters' `world_setting`, `speech_style`, `traits`, and first sample dialogue. The orchestrator builds a Dart-side cast (locked `id` slugs) and tells Gemma "characterId MUST be one of …". Any mismatch is retagged in `_retagSceneIds` before render.
+`AgentPrompts._franchisePersonaBlock(franchise)` injects the top 2 characters' `world_setting`, `speech_style`, `traits`, and first sample dialogue. The orchestrator builds a Dart-side cast (locked `id` slugs); the parser maps every line back to one of those slugs.
 
-Cast capped at **3** — chat-energy stays coherent on the small model.
+Cast capped at **2** — chat-energy stays coherent on the small model and prefill stays under the LiteRT-LM segfault threshold.
 
 ### Multimodal scan (`features/scan/screens/scan_textbook_screen.dart`)
 
@@ -262,9 +259,9 @@ Dark glassmorphism + neon accents. Key colors: bg `0xFF0A0E21`, surface `0xFF0F1
 
 - **No cloud calls.** If you're tempted to add `http`, `dio`, `firebase_*`, or a cloud AI SDK — stop. Offline-after-bootstrap is the pitch. The one exception is `flutter_tts` which uses the device's local TTS engine (no network).
 - **Riverpod is barely used.** Don't introduce Riverpod providers for new feature state; follow the existing `StatefulWidget` + `ChangeNotifier` pattern unless you have a strong reason.
-- **JSON from Gemma is unreliable.** Always parse through `_parseJsonAny` (or replicate its behavior) — never `jsonDecode(raw)` directly on model output. For chat-style flows (Companion, Feynman) use plain text streaming.
+- **JSON from Gemma is unreliable.** Always parse through `_parseJsonAny` (or replicate its behavior) — never `jsonDecode(raw)` directly on model output. For chat-style flows (Companion, Feynman, Story) use plain text streaming with a regex/parser, not JSON. When you do use JSON (e.g., quiz, mastery, image-analysis), retry once on parse failure — the small model drops a brace surprisingly often.
 - **All Gemma prompts must thread `language`.** The user's language is `LocalProfileService.instance.currentProfile?.language` and the orchestrator passes it into every prompt. Mood and dyslexic flags follow the same pattern.
-- **Story cast is built in Dart, not Gemma.** Locking `characterId` to a known slug list prevents Gemma from inventing new names. `_retagSceneIds` is the safety net.
+- **Story cast + speaker order are built in Dart, not Gemma.** Locking `characterId` to a known slug list prevents Gemma from inventing new names. ABAB alternation is enforced in `_parsePipeLine` via `cast[sceneIndex % cast.length]` — the model's name token is ignored. The prompt still asks for alternation as a soft hint, but trust the parser.
 - **Topic keys are sanitized.** Always round-trip through `_sanitizeKey` / the equivalent regex before reads.
 - **A11y is opt-in and lazy.** TTS engine must NOT initialize on app startup — only on first `speak()` call. Both dyslexic and TTS toggles default OFF.
 - **Resist re-adding deleted features.** The Franchise Lab subapp, Comic Album, Knowledge Graph, Skill Tree, Achievements, Courses, Topic Explorer, and Search routes were removed in a deliberate Story-first cut. If a hackathon-feature impulse arrives ("we should add a leaderboard…"), check whether it actually serves the five pillars before writing code.
