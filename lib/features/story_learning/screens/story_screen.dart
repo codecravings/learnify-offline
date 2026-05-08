@@ -1168,7 +1168,7 @@ class _StoryScreenState extends State<StoryScreen> {
           Expanded(
             child: ListView.separated(
               itemCount: q.options.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
               itemBuilder: (_, i) => _buildAnswerOption(q, i),
             ),
           ),
@@ -1706,7 +1706,7 @@ class _GemmaThinkingOrbState extends State<_GemmaThinkingOrb>
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _ctrl,
-      builder: (_, __) {
+      builder: (_, _) {
         final t = _ctrl.value;
         return Stack(
           alignment: Alignment.center,

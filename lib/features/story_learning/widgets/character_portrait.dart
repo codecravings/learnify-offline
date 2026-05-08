@@ -35,7 +35,7 @@ class CharacterPortrait extends StatelessWidget {
               width: size,
               height: size,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
+              errorBuilder: (_, _, _) => Container(
                 color: character.accentColor.withAlpha(30),
                 child: Center(
                   child: Text(
