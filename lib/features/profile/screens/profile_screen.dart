@@ -91,7 +91,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               const SizedBox(height: 10),
               AnimatedBuilder(
                 animation: _tabs,
-                builder: (_, __) => switch (_tabs.index) {
+                builder: (_, _) => switch (_tabs.index) {
                   0 => _buildOverviewTab(p),
                   1 => _buildPathsTab(),
                   _ => _buildAchievementsTab(p),

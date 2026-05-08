@@ -740,7 +740,7 @@ class _GemmaThinkingOrbState extends State<_GemmaThinkingOrb>
     final purple = AppTheme.accentPurpleOf(context);
     return AnimatedBuilder(
       animation: _c,
-      builder: (_, __) {
+      builder: (_, _) {
         final t = _c.value;
         return SizedBox(
           width: 120,

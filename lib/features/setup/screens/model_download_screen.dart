@@ -127,7 +127,7 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen>
               // Gemma logo / branding
               AnimatedBuilder(
                 animation: _pulseCtrl,
-                builder: (_, __) => Container(
+                builder: (_, _) => Container(
                   width: 72,
                   height: 72,
                   decoration: BoxDecoration(
