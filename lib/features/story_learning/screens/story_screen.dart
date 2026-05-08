@@ -60,7 +60,7 @@ class _StoryScreenState extends State<StoryScreen> {
 
   Map<String, dynamic>? _levelAssessment;
   bool _assessing = false;
-  String _loadingStage = 'Calling Gemma 4 E2B on-device…';
+  String _loadingStage = 'Warming up Gemma 4 on your device…';
 
   StoryResponse? _story;
   // Number of scenes the user has revealed so far. Drives the chat-bubble feed.
@@ -302,7 +302,7 @@ class _StoryScreenState extends State<StoryScreen> {
 
     setState(() {
       _phase = _Phase.loading;
-      _loadingStage = 'Checking your learning memory…';
+      _loadingStage = 'Pulling what you already know…';
       _story = null;
       _revealedSceneCount = 0;
       _isGeneratingMore = true;
