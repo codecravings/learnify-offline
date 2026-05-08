@@ -73,7 +73,7 @@ class _StoryScreenState extends State<StoryScreen> {
   // to the UI one at a time on a fixed cadence so the chat feels live (and
   // the typing pill between bubbles soaks up generation latency).
   Timer? _revealTimer;
-  static const Duration _revealCadence = Duration(milliseconds: 1700);
+  static const Duration _revealCadence = Duration(milliseconds: 1300);
   final ScrollController _chatScroll = ScrollController();
 
   int _ttsActiveWord = -1;
