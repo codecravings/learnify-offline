@@ -718,6 +718,18 @@ You are about to receive a turn instruction telling you what to do next. Follow 
 
   // ── MASTERY AGENT (structured topic decomposition) ──────────────────────
 
+  /// Step counts scale with the learner's chosen depth — basics gets a quick
+  /// 4-step intro, intermediate gets a fuller 7, advanced gets 11 with the
+  /// nuance/edge cases. The agent prompt enforces the exact count.
+  static const Map<String, int> _masteryStepsByLevel = {
+    'basics': 4,
+    'intermediate': 7,
+    'advanced': 11,
+  };
+
+  static int masteryStepsForLevel(String level) =>
+      _masteryStepsByLevel[level] ?? 6;
+
   Future<Map<String, dynamic>> decomposeMasteryPath({
     required String topic,
     String level = 'basics',
@@ -735,6 +747,7 @@ You are about to receive a turn instruction telling you what to do next. Follow 
         level: level,
         pastConcepts: pastConcepts.isEmpty ? 'none yet' : pastConcepts,
         language: _lang,
+        targetStepCount: masteryStepsForLevel(level),
       ),
       userPrompt: 'Decompose "$topic" into a mastery path.',
       maxTokens: 1500,

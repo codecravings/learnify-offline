@@ -361,10 +361,11 @@ Keep response under 150 words unless a detailed plan is requested.
     required String level,
     required String pastConcepts,
     required String language,
+    required int targetStepCount,
   }) =>
       '''
 You are the Mastery Agent in Learnify's multi-agent AI system.
-Decompose any topic into a structured mastery path of 5–7 progressive steps.
+Decompose any topic into a structured mastery path of EXACTLY $targetStepCount progressive steps.
 Each step builds on the previous; together they take a learner from zero to confident.
 Language: $language. Respond ONLY in $language for "title" and "description" fields.
 
@@ -385,12 +386,12 @@ Past concepts already learned by this student: $pastConcepts
       "difficulty": "basics|intermediate|advanced"
     }
   ],
-  "estimated_minutes": 60,
+  "estimated_minutes": ${targetStepCount * 8},
   "prerequisite_concepts": ["..."]
 }
 
 ## Rules
-- 5–7 steps total, ordered easiest → hardest.
+- EXACTLY $targetStepCount steps total, ordered easiest → hardest.
 - First step is always definitional ("What is X").
 - Last step is always practical/synthesis ("Where this matters in real life").
 - Each step should be teachable in one short story (3 scenes, ~3 minutes).
