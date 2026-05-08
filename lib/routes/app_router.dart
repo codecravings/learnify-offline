@@ -52,11 +52,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // ── Setup flow ────────────────────────────────────────────────────────
       GoRoute(
         path: AppRoutes.setup,
-        builder: (_, __) => const ModelDownloadScreen(),
+        builder: (_, _) => const ModelDownloadScreen(),
       ),
       GoRoute(
         path: AppRoutes.setupProfile,
-        builder: (_, __) => const ProfileSetupScreen(),
+        builder: (_, _) => const ProfileSetupScreen(),
       ),
 
       // ── Home shell (bottom nav: Home / Companion / Profile) ───────────────
@@ -65,15 +65,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: AppRoutes.home,
-            builder: (_, __) => const HomeDashboard(),
+            builder: (_, _) => const HomeDashboard(),
           ),
           GoRoute(
             path: '/home/companion',
-            builder: (_, __) => const StudyCompanionScreen(),
+            builder: (_, _) => const StudyCompanionScreen(),
           ),
           GoRoute(
             path: '/home/profile',
-            builder: (_, __) => const ProfileScreen(),
+            builder: (_, _) => const ProfileScreen(),
           ),
         ],
       ),
@@ -124,7 +124,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // ── Scan / Mastery / Profile ─────────────────────────────────────────
       GoRoute(
         path: AppRoutes.scan,
-        builder: (_, __) => const ScanTextbookScreen(),
+        builder: (_, _) => const ScanTextbookScreen(),
       ),
       GoRoute(
         path: AppRoutes.masteryPath,
@@ -138,7 +138,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.userProfile,
-        builder: (_, __) => const ProfileScreen(),
+        builder: (_, _) => const ProfileScreen(),
       ),
     ],
   );
