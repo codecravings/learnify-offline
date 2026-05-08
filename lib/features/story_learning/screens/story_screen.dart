@@ -247,7 +247,16 @@ class _StoryScreenState extends State<StoryScreen> {
     _franchise = widget.franchiseName ?? '';
 
     if (widget.preselectedLevel != null) {
-      _level = widget.preselectedLevel!;
+      // The mastery agent occasionally writes 'beginner' / 'intro' /
+      // 'easy' instead of one of our three sanctioned levels. Map those
+      // back so the prompt's level guard still matches.
+      const allowed = {'basics', 'intermediate', 'advanced'};
+      final raw = widget.preselectedLevel!.trim().toLowerCase();
+      _level = allowed.contains(raw)
+          ? raw
+          : (raw.contains('adv') ? 'advanced'
+              : raw.contains('inter') ? 'intermediate'
+              : 'basics');
       _phase = widget.preselectedStyle != null
           ? _Phase.loading
           : _Phase.styleSelect;
