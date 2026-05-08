@@ -169,14 +169,16 @@ class GemmaOrchestrator {
     }
 
     if (scenes.isEmpty) {
-      // Model produced output but nothing matched the chat format. Surface
-      // the raw text once so we can diagnose; the screen will then offer a
-      // retry instead of silently hanging on the typing pill.
+      // Model produced output but nothing matched the chat format. Dump it
+      // so we can see whether (a) zero tokens, (b) preamble that never
+      // crossed a newline, or (c) wrong-format lines. The screen catches
+      // the throw and resets to style-select instead of hanging.
       final dump = fullRaw.toString();
-      debugPrint('[Story] 0 scenes parsed. Raw output (first 600 chars):\n'
-          '${dump.substring(0, dump.length.clamp(0, 600))}');
+      final head = dump.substring(0, dump.length.clamp(0, 800));
+      debugPrint('[Story] 0 scenes parsed. tokens=${dump.length} '
+          'output=<<<$head>>>');
       throw StateError(
-          'No chat lines parsed from Gemma output (length=${dump.length}).');
+          'No chat lines parsed from Gemma (got ${dump.length} chars).');
     }
 
     // ── Quiz: separate small JSON call (fast, ~50 tokens) ────────────────
