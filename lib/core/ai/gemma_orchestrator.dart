@@ -124,6 +124,7 @@ class GemmaOrchestrator {
     // ── Stream the 6 scene lines ─────────────────────────────────────────
     final scenes = <StoryScene>[];
     final buffer = StringBuffer();
+    final fullRaw = StringBuffer();
 
     final stream = _gemma.generateStream(
       systemPrompt: systemPrompt,
@@ -133,6 +134,7 @@ class GemmaOrchestrator {
 
     await for (final token in stream) {
       buffer.write(token);
+      fullRaw.write(token);
       while (true) {
         final raw = buffer.toString();
         final newlineIdx = raw.indexOf('\n');
@@ -150,6 +152,8 @@ class GemmaOrchestrator {
           scenes.add(scene);
           yield StoryChunk.tail(scenes: [scene], quiz: const []);
           if (scenes.length >= 6) break;
+        } else {
+          debugPrint('[Story] dropped line: $line');
         }
       }
       if (scenes.length >= 6) break;
@@ -163,6 +167,17 @@ class GemmaOrchestrator {
         scenes.add(scene);
         yield StoryChunk.tail(scenes: [scene], quiz: const []);
       }
+    }
+
+    if (scenes.isEmpty) {
+      // Model produced output but nothing matched the chat format. Surface
+      // the raw text once so we can diagnose; the screen will then offer a
+      // retry instead of silently hanging on the typing pill.
+      final dump = fullRaw.toString();
+      debugPrint('[Story] 0 scenes parsed. Raw output (first 600 chars):\n'
+          '${dump.substring(0, dump.length.clamp(0, 600))}');
+      throw StateError(
+          'No chat lines parsed from Gemma output (length=${dump.length}).');
     }
 
     // ── Quiz: separate small JSON call (fast, ~50 tokens) ────────────────

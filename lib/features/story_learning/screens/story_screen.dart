@@ -359,8 +359,16 @@ class _StoryScreenState extends State<StoryScreen> {
       },
       onError: (e) {
         if (!mounted) return;
-        _isGeneratingMore = false;
-        _showError('Generation failed: $e');
+        // Reset back to style-select so the user can retry without staring
+        // at a frozen typing pill. _showError surfaces the reason.
+        _revealTimer?.cancel();
+        _revealTimer = null;
+        setState(() {
+          _isGeneratingMore = false;
+          _story = null;
+          _phase = _Phase.styleSelect;
+        });
+        _showError('Couldn\'t generate. Tap GENERATE LESSON to retry.');
         if (!completer.isCompleted) completer.complete();
       },
       onDone: () {

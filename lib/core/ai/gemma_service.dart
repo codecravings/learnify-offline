@@ -252,9 +252,25 @@ class GemmaService {
     );
 
     await chat.addQueryChunk(Message.text(text: userPrompt, isUser: true));
-    await for (final chunk in chat.generateChatResponseAsync()) {
-      if (chunk is TextResponse) yield chunk.token;
+    var chunkCount = 0;
+    var textCount = 0;
+    try {
+      await for (final chunk in chat.generateChatResponseAsync()) {
+        chunkCount++;
+        if (chunk is TextResponse) {
+          textCount++;
+          yield chunk.token;
+        } else {
+          debugPrint('[Gemma.stream] non-text chunk #$chunkCount: '
+              '${chunk.runtimeType}');
+        }
+      }
+    } catch (e, st) {
+      debugPrint('[Gemma.stream] threw after $chunkCount chunks '
+          '($textCount text): $e\n$st');
+      rethrow;
     }
+    debugPrint('[Gemma.stream] done: $chunkCount chunks, $textCount text');
   }
 
   /// Acquire the text-only inference model with one retry. flutter_gemma
