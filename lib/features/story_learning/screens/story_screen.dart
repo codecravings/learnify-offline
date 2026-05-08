@@ -270,6 +270,7 @@ class _StoryScreenState extends State<StoryScreen> {
   }
 
   Future<void> _assessLevel() async {
+    if (_topic.isEmpty) return;
     setState(() => _assessing = true);
     try {
       final assessment = await _orchestrator.assessTopicLevel(_topic);
