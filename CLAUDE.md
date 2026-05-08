@@ -116,7 +116,7 @@ Six tables, all keyed by `profile_id` (supports multiple profiles on one device)
 - `quiz_results` — raw history (`missed_questions` + `concepts` as JSON arrays)
 - `memory_events` — narrative events for RAG-style recall (`type` ∈ {`topic_interest`, `feynman_taught`, …}, `content`, `topic`, `tags`)
 - `chat_history` — per-agent chat log (`agent = 'companion' | ...`)
-- `topic_paths` — Mastery Agent output: `topic_key`, `topic_name`, `steps_json` (5–7 steps), `current_step_index`, `completed_step_indices` (JSON array of ints), `estimated_minutes`. Unique on `(profile_id, topic_key)`.
+- `topic_paths` — Mastery Agent output: `topic_key`, `topic_name`, `steps_json` (4/7/11 steps by level), `current_step_index`, `completed_step_indices` (JSON array of ints), `estimated_minutes`. Unique on `(profile_id, topic_key)`.
 
 Migrations are idempotent and additive: v1 → v2 adds `topic_paths`, v2 → v3 adds the mood columns, v3 → v4 adds the a11y columns. `topic_key` is always `topic.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')`.
 
@@ -124,7 +124,7 @@ On first DB open, `_wipeLegacyLabDb` best-effort deletes any `franchise_lab.db` 
 
 ### Mastery Agent + Path UI (Wave 1 — the spine)
 
-`AgentPrompts.mastery(...)` decomposes any topic into 5–7 progressive steps with concept tags + difficulty. `GemmaOrchestrator.decomposeMasteryPath` injects the learner's *already-mastered* concepts so the agent can skip basics they already know.
+`AgentPrompts.mastery(...)` decomposes any topic into a level-scaled set of progressive steps: **basics → 4**, **intermediate → 7**, **advanced → 11** (single source of truth in `GemmaOrchestrator.masteryStepsForLevel`). `decomposeMasteryPath` injects the learner's *already-mastered* concepts so the agent can skip basics they already know.
 
 `MasteryPathScreen` (`features/mastery_path/screens/`) is a Duolingo-style stepped UI:
 - Self-bootstraps the path on first visit (calls `decomposeMasteryPath` → `saveMasteryPath`)
