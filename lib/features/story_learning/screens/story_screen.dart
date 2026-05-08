@@ -1025,7 +1025,10 @@ class _StoryScreenState extends State<StoryScreen> {
                 ),
               ),
               Text(
-                '$reveal/${_isGeneratingMore ? "…" : totalKnown}',
+                // Stable denominator: target is always 6 scenes. While
+                // generating we still know that, so showing "n/6" reads
+                // cleaner than the old "n/…" → "n/3" → "n/4" stair-step.
+                '$reveal/${_isGeneratingMore || totalKnown < 6 ? 6 : totalKnown}',
                 style: GoogleFonts.orbitron(
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
