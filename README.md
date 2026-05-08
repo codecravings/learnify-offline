@@ -52,7 +52,7 @@ The flagship moment. Type any topic, pick a vibe, and the lesson arrives as a re
 
 ⚡ **Progressive generation**: scenes 1–4 paint within seconds while Gemma writes the rest in the background — the small on-device model never feels slow.
 
-🔁 Each message reveals on tap, scrolls into a chat feed, and the cast is locked in code so Gemma can't drift off-character.
+🔁 Each message auto-reveals on a 1.3 s typing-pill cadence (like a real chat), scrolls into a chat feed, and the cast + speaker order is locked in code so Gemma can't drift off-character or monologue as one person.
 
 ---
 
