@@ -234,8 +234,9 @@ class GemmaService {
     await chat.addQueryChunk(Message.text(text: userPrompt, isUser: true));
     final response = await chat.generateChatResponse();
     final out = _extractText(response);
-    debugPrint('[Gemma] generate → ${out.length} chars: '
-        '${out.substring(0, out.length.clamp(0, 240))}');
+    // Just length on success — full output preview only when something
+    // failed downstream (callers print their own diagnostic dump).
+    debugPrint('[Gemma] generate → ${out.length} chars');
     return out;
   }
 
