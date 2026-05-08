@@ -345,10 +345,19 @@ class _StoryScreenState extends State<StoryScreen> {
                 quiz: hasQuiz ? chunk.quiz : prev.quiz,
                 franchiseCharacters: prev.franchiseCharacters,
               );
-              // First scene: reveal instantly so the user isn't staring at
-              // an empty chat. The rest are paced by the timer.
+              // First scene: hold for ~600ms before showing so the user
+              // sees at least one beat of the typing pill (otherwise the
+              // first bubble appears the instant the chat opens, which
+              // looks janky on fast streams).
               if (_revealedSceneCount == 0 && newScenes.isNotEmpty) {
-                _revealedSceneCount = 1;
+                Future.delayed(const Duration(milliseconds: 600), () {
+                  if (!mounted) return;
+                  if (_revealedSceneCount == 0 &&
+                      (_story?.scenes.isNotEmpty ?? false)) {
+                    setState(() => _revealedSceneCount = 1);
+                    _scheduleAutoScroll();
+                  }
+                });
               }
               if (hasQuiz) _isGeneratingMore = false;
             });
