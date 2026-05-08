@@ -453,21 +453,19 @@ class _StoryScreenState extends State<StoryScreen> {
     });
   }
 
-  void _revealNextScene() {
+  /// Advances from the chat to the quiz. The reveal timer handles
+  /// scene-by-scene reveals on its own now, so this is purely the
+  /// "ONE LAST CHECK" CTA handler.
+  void _startQuiz() {
     final story = _story;
-    if (story == null) return;
-    if (_revealedSceneCount < story.scenes.length) {
-      setState(() => _revealedSceneCount++);
-      _scheduleAutoScroll();
-    } else if (!_isGeneratingMore && story.quiz.isNotEmpty) {
-      setState(() {
-        _phase = _Phase.quiz;
-        _questionIndex = 0;
-        _correctCount = 0;
-        _selectedOption = null;
-        _showExplanation = false;
-      });
-    }
+    if (story == null || story.quiz.isEmpty || _isGeneratingMore) return;
+    setState(() {
+      _phase = _Phase.quiz;
+      _questionIndex = 0;
+      _correctCount = 0;
+      _selectedOption = null;
+      _showExplanation = false;
+    });
   }
 
   void _submitAnswer(int index) {
@@ -1095,7 +1093,7 @@ class _StoryScreenState extends State<StoryScreen> {
         label: 'ONE LAST CHECK',
         icon: Icons.quiz_rounded,
         colors: [AppTheme.accentCyan, _style.color],
-        onTap: _revealNextScene,
+        onTap: _startQuiz,
       );
     } else {
       // Streaming or quiz still pending. Either way: typing indicator.
