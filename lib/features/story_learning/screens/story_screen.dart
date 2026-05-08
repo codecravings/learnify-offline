@@ -69,6 +69,11 @@ class _StoryScreenState extends State<StoryScreen> {
   // show a subtle "writing..." pill if the user reaches the bottom early).
   bool _isGeneratingMore = false;
   StreamSubscription<StoryChunk>? _streamSub;
+  // Stagger reveal: scenes arrive from Gemma in bursts, but we expose them
+  // to the UI one at a time on a fixed cadence so the chat feels live (and
+  // the typing pill between bubbles soaks up generation latency).
+  Timer? _revealTimer;
+  static const Duration _revealCadence = Duration(milliseconds: 1700);
   final ScrollController _chatScroll = ScrollController();
 
   int _ttsActiveWord = -1;
@@ -91,6 +96,7 @@ class _StoryScreenState extends State<StoryScreen> {
   @override
   void dispose() {
     _streamSub?.cancel();
+    _revealTimer?.cancel();
     _ttsSub?.cancel();
     _chatScroll.dispose();
     TextToSpeechService.instance.stop();
@@ -293,6 +299,8 @@ class _StoryScreenState extends State<StoryScreen> {
     });
 
     await _streamSub?.cancel();
+    _revealTimer?.cancel();
+    _revealTimer = null;
 
     final stream = _orchestrator.streamStoryChunks(
       topic: _topic,
@@ -321,10 +329,11 @@ class _StoryScreenState extends State<StoryScreen> {
           });
           _scheduleAutoScroll();
         } else {
-          // Tail chunks now arrive one-per-scene (and one final chunk with
-          // just the quiz). Each scene auto-reveals as it lands so the chat
-          // feed feels live, like a WhatsApp group chat. _isGeneratingMore
-          // only flips false once the quiz tail arrives.
+          // Tail chunks arrive one-per-scene (and one final chunk with just
+          // the quiz). Scenes are appended to the buffer and revealed on a
+          // 1.7s cadence by `_revealTimer` — so the user sees a "typing…"
+          // pill between bubbles and Gemma gets extra wall-clock to stream
+          // the next scene without a visible stall.
           final prev = _story;
           if (prev != null) {
             final newScenes = [...prev.scenes, ...chunk.scenes];
@@ -336,9 +345,14 @@ class _StoryScreenState extends State<StoryScreen> {
                 quiz: hasQuiz ? chunk.quiz : prev.quiz,
                 franchiseCharacters: prev.franchiseCharacters,
               );
-              _revealedSceneCount = newScenes.length;
+              // First scene: reveal instantly so the user isn't staring at
+              // an empty chat. The rest are paced by the timer.
+              if (_revealedSceneCount == 0 && newScenes.isNotEmpty) {
+                _revealedSceneCount = 1;
+              }
               if (hasQuiz) _isGeneratingMore = false;
             });
+            _kickRevealTimer();
             _scheduleAutoScroll();
           }
         }
@@ -356,6 +370,25 @@ class _StoryScreenState extends State<StoryScreen> {
     );
 
     await completer.future;
+  }
+
+  void _kickRevealTimer() {
+    if (_revealTimer != null && _revealTimer!.isActive) return;
+    _revealTimer = Timer.periodic(_revealCadence, (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      final story = _story;
+      if (story == null) return;
+      if (_revealedSceneCount < story.scenes.length) {
+        setState(() => _revealedSceneCount++);
+        _scheduleAutoScroll();
+      } else if (!_isGeneratingMore) {
+        t.cancel();
+        _revealTimer = null;
+      }
+    });
   }
 
   void _scheduleAutoScroll() {
@@ -1366,6 +1399,8 @@ class _StoryScreenState extends State<StoryScreen> {
         const SizedBox(height: 10),
         TextButton(
           onPressed: () {
+            _revealTimer?.cancel();
+            _revealTimer = null;
             setState(() {
               _phase = _Phase.styleSelect;
               _story = null;

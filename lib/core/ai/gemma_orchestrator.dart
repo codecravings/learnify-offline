@@ -128,7 +128,7 @@ class GemmaOrchestrator {
     final stream = _gemma.generateStream(
       systemPrompt: systemPrompt,
       userPrompt:
-          'Generate the 6-line group chat about "$topic" now. Use the format Name|emotion|dialogue. End with [END].',
+          'Generate the 6-line group chat about "$topic" now. Format: Name|emotion|dialogue per line.',
     );
 
     await for (final token in stream) {

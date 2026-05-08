@@ -61,11 +61,10 @@ Speaker order — start each line with EXACTLY this prefix:
 $orderBlock
 
 Rules:
-- NEVER two consecutive lines from the same speaker.
-- "Name" must match the prefix above for that line. No new characters.
 - "emotion" is one word: curious, hyped, chill, confused, surprised, amused, smug, sad.
 - "dialogue" ≤ 18 words. Texting tone. One optional emoji where natural.
-- Build a real conversation: ${order[0]} asks → ${order[1]} answers → ${order[0]} reacts → ${order[1]} clarifies → ${order[0]} pushes → ${order[1]} lands the "ohhh" moment.
+- Each line introduces ONE new sub-idea — never restate the previous one.
+- Conversation arc: ${order[0]} hooks → ${order[1]} answers → ${order[0]} pushes → ${order[1]} explains the *why* → ${order[0]} probes a real example → ${order[1]} lands the "ohhh" payoff.
 - NO JSON, NO bullet points, NO preamble. Just the 6 lines.
 - After the 6th line, output "[END]" on its own line.
 
