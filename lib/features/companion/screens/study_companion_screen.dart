@@ -247,9 +247,11 @@ class _StudyCompanionScreenState extends State<StudyCompanionScreen> {
     final steps = (path['steps'] as List).cast<Map<String, dynamic>>();
     final completed = (path['completedStepIndices'] as List).length;
     final total = steps.length;
+    if (total == 0) return const SizedBox.shrink();
     final current = (path['currentStepIndex'] as int).clamp(0, total - 1);
-    final topic = path['topic'] as String;
-    final nextTitle = steps.isNotEmpty ? (steps[current]['title'] as String? ?? '') : '';
+    final topic = (path['topic'] as String?) ?? '';
+    if (topic.isEmpty) return const SizedBox.shrink();
+    final nextTitle = (steps[current]['title'] as String?) ?? '';
 
     return GestureDetector(
       onTap: () => context.push(AppRoutes.masteryPath, extra: {'topic': topic}),
