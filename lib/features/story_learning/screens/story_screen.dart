@@ -391,13 +391,19 @@ class _StoryScreenState extends State<StoryScreen> {
 
   void _kickRevealTimer() {
     if (_revealTimer != null && _revealTimer!.isActive) return;
+    if (_story == null) return; // No story yet, nothing to reveal.
     _revealTimer = Timer.periodic(_revealCadence, (t) {
       if (!mounted) {
         t.cancel();
         return;
       }
       final story = _story;
-      if (story == null) return;
+      if (story == null) {
+        // Story was nulled (retry path). Stop ticking.
+        t.cancel();
+        _revealTimer = null;
+        return;
+      }
       if (_revealedSceneCount < story.scenes.length) {
         setState(() => _revealedSceneCount++);
         _scheduleAutoScroll();
