@@ -149,6 +149,10 @@ class _MasteryPathScreenState extends State<MasteryPathScreen> {
     context.push('/lesson', extra: {
       'customTopic': '${widget.topic} — Step ${index + 1}: $title',
       'preselectedLevel': difficulty,
+      // Mastery-path lessons skip the style picker — the user already
+      // committed to a structured path, so jumping straight to Practical
+      // is less friction than a redundant 2-button modal.
+      'preselectedStyle': 'practical',
       'pathTopicKey': path['topicKey'],
       'pathStepIndex': index,
     });
