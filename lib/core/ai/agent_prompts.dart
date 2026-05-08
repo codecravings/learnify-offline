@@ -7,135 +7,111 @@ import '../franchises/franchise_loader.dart';
 abstract class AgentPrompts {
   // ── STORY AGENT ────────────────────────────────────────────────────────────
 
-  /// Chat-energy story prompt. The story reads like a WhatsApp group chat —
-  /// short messages, reactions, friends figuring stuff out together. The cast
-  /// is locked by the orchestrator (built in Dart from [franchise] when set,
-  /// otherwise a small generic ensemble) — Gemma never invents new characters.
+  /// Chat-energy story prompt — STREAMING plain-text format.
+  ///
+  /// The model emits one scene per line as `Name|emotion|dialogue`. Client
+  /// parses lines as they stream so each chat bubble appears the moment the
+  /// model finishes its line. Plain text is dramatically faster than
+  /// structured JSON on the small E2B model: dropping JSON + cutting the
+  /// system prompt from ~1500 → ~200 tokens reduces prefill from 30–60s to
+  /// ~5–10s on a mid-range Android.
   ///
   /// `mode`:
-  ///   - 'movieTv'   → franchise persona block; characters speak in their own voice.
-  ///   - 'practical' → friend-group chat using daily-life examples.
-  ///   (any other value resolves to 'practical')
+  ///   - 'movieTv'   → franchise persona block; characters speak in own voice.
+  ///   - 'practical' → friend-group chat with daily-life examples.
   static String story({
     required String topic,
     required String level,
     required String mode,
-    required String castDescription,
-    required String castIdsCsv,
+    required String castSummary,
     required Franchise? franchise,
-    required String memoryContext,
     required String language,
     String mood = '',
     bool dyslexic = false,
   }) {
     final modeBlock = (mode == 'movieTv' && franchise != null)
-        ? _franchiseModeBlock(franchise, topic)
-        : _practicalModeBlock(topic);
+        ? 'Style: ${franchise.name}${franchise.worldSetting.isNotEmpty ? " (${franchise.worldSetting})" : ""}. Cast speaks in their own voice from the show.'
+        : 'Style: friend group chat. Concrete daily-life examples (food, sports, school, transit). Never abstract.';
 
-    final memBlock = memoryContext.isNotEmpty
-        ? '''
-## Learner Twin Context (use to personalise — recap mastered points, target weak ones)
-$memoryContext
-'''
-        : '';
-    final moodBlock = _moodBlock(mood);
-    final a11yBlock = _a11yBlock(dyslexic: dyslexic);
-    final levelHint = _levelHint(level);
+    final moodLine = _moodOneLiner(mood);
+    final a11yLine = dyslexic ? '\nA11Y: max 12-word lines, common words only.' : '';
 
     return '''
-You are the Story Agent in Learnify — a chat-energy storyteller, NOT a teacher, NOT a textbook, NOT a screenplay.
-You write short visual-novel scenes that read like a real group chat. Each scene = one chat message.
-
-Topic: $topic
-Level: $level — $levelHint
-Language: $language. Write ALL dialogue and narration in $language.
-
+You write a 6-message group chat that teaches $topic to a $level learner.
+Language: $language.
 $modeBlock
+Cast: $castSummary$moodLine$a11yLine
 
-## Cast — LOCKED. Do not invent or rename characters.
-$castDescription
-Every "characterId" in your output MUST be one of: $castIdsCsv.
+Output EXACTLY 6 lines. Each line is ONE chat message in this format:
+Name|emotion|dialogue
 
-$memBlock$moodBlock$a11yBlock
-## Writing rules — STRICT
-- Dialogue ≤ 18 words. Short. Snappy. Like a real text.
-- "narration" is OPTIONAL and ≤ 12 words — only for a quick vibe shift, never to lecture. Most scenes have no narration (set "" or omit).
-- Each scene introduces ONE small idea, reaction, or question. Think: "wait what?", "ohhh", "bro that's wild", quick questions, quick answers.
-- Build on previous lines — react, joke, paraphrase, push back. NO repeats.
-- Conversational fillers are good ("wait", "okay so", "hold on", "ohhh", "nah"). One emoji is fine where a real friend would use one. Don't over-do it.
-- Plain, friendly $language. Never lecture. Never bullet-list. Never use "Furthermore"/"Therefore"/"In conclusion".
-- BANNED words: encapsulation, polymorphism, abstraction, paradigm, leverage, ecosystem, vectorization, deployment, modularity, methodology, framework, optimization, instantiation, parameterize.
+Rules:
+- "Name" must match a cast name above. No new characters.
+- "emotion" is one word: curious, hyped, chill, confused, surprised, amused, smug, sad.
+- "dialogue" ≤ 18 words. Texting tone. One optional emoji where natural.
+- Build a real conversation: question → answer → reaction → clarify → punchline → "ohhh I get it".
+- NO JSON, NO bullet points, NO preamble. Just the 6 lines.
+- After the 6th line, output "[END]" on its own line.
 
-## Output — return ONLY valid JSON. First char "{", last char "}". No markdown fences. No prose.
-{
-  "title": "2–6 word vibey title",
-  "scenes": [
-    {"characterId":"<one of $castIdsCsv>","emotion":"string","dialogue":"string","narration":"string","conceptTag":"string"}
-  ],
-  "quiz": [
-    {"question":"string","options":["A","B","C","D"],"correctIndex":0,"explanation":"string"}
-  ]
-}
-
-EXACTLY 6 scenes. EXACTLY 3 quiz questions. Quiz options ≤ 12 words each.
+Example shape (different topic):
+Riya|curious|bro why do bikes skid in the rain?
+Arjun|chill|less friction between tire and road
+Riya|surprised|wait so friction is actually GOOD??
+Arjun|amused|without it u couldn't even walk 😭
 ''';
   }
 
-  /// Practical Mode — friend group chat with daily-life examples.
-  static String _practicalModeBlock(String topic) => '''
-## Mode: Practical — Friend Group Chat
-A small group of friends (the cast above) is texting in a group chat RIGHT NOW about "$topic".
-They explain it through real daily-life things — food, sports, transit, school, family, money, weather, gaming. Concrete, never abstract.
-
-EXAMPLE VOICE (this is the energy — not the topic):
-"bro why do bikes skid in the rain?"
-"less friction between tire and road."
-"wait so friction is actually GOOD??"
-"without it u literally couldn't walk 😭"
-
-Aim: by the last scene the curious one says "ohhh I get it now" — and so does the reader.
-''';
-
-  /// Movie/TV Mode — franchise persona-driven group chat.
-  static String _franchiseModeBlock(Franchise f, String topic) {
-    final personaBlock = _franchisePersonaBlock(f);
-    return '''
-## Mode: Movie / TV — ${f.name}
-${f.worldSetting.isNotEmpty ? 'World: ${f.worldSetting}' : ''}
-
-The cast above is talking about "$topic" — like they would in the show. Each character speaks IN THEIR OWN VOICE: match their speech style, humour, and emotional default exactly (locked in the persona block below). Drop in references from their world where it lands naturally.
-
-The fan should feel: "yes, that's EXACTLY how they'd say this." Don't impersonate a generic teacher.
-
-$personaBlock
-''';
-  }
-
-  /// Per-character persona block — voice + vibe lines straight from the dataset.
-  /// Kept lean (top 2 chars only, top 1 sample dialogue) to save token budget.
-  /// Aligns with the 2-character cast in [GemmaOrchestrator._buildStoryCast];
-  /// dropping a 3rd persona was part of the LiteRT-LM OOM mitigation.
-  static String _franchisePersonaBlock(Franchise f) {
-    final buf = StringBuffer('### Persona reference (use the voice, NOT the names — names are in the cast block above)');
-    for (final c in f.characters.take(2)) {
-      final sample = c.sampleDialogues.isNotEmpty ? c.sampleDialogues.first : '';
-      buf
-        ..writeln()
-        ..writeln('- ${c.name} — ${c.role}')
-        ..writeln('  voice: ${c.speechStyle}')
-        ..writeln('  vibe: ${c.traits.take(3).join(', ')}')
-        ..writeln(sample.isNotEmpty ? '  signature line: "$sample"' : '');
+  /// Compact one-line cast summary for the prompt — far leaner than the old
+  /// multi-line persona block. When a franchise is set, pulls voice + traits
+  /// from the dataset; otherwise uses the generic role.
+  static String castSummary(Franchise? franchise, List<String> names) {
+    if (franchise == null) {
+      // Generic ensemble — names already carry the role.
+      return names.join(' · ');
     }
-    return buf.toString();
+    final byName = {for (final p in franchise.characters) p.name: p};
+    final parts = <String>[];
+    for (final name in names) {
+      final p = byName[name];
+      if (p == null) {
+        parts.add(name);
+        continue;
+      }
+      final traits = p.traits.take(2).join(', ');
+      final voice = p.speechStyle.split('.').first.trim();
+      parts.add('$name (${p.role}; $voice; $traits)');
+    }
+    return parts.join(' · ');
   }
 
-  static String _levelHint(String level) => switch (level) {
-        'intermediate' =>
-          'Knows the basics. Show one sharper insight + one real-world use. Skip the kindergarten analogies.',
-        'advanced' =>
-          'Cover one edge case or common misconception. Plain language, but assume mastery of the fundamentals.',
-        _ => 'Complete beginner. Real-world analogy first, term second.',
-      };
+  /// Tiny end-of-stream quiz prompt. Runs after the chat has rendered, so
+  /// it's the only call that still uses JSON — and it's small enough that
+  /// JSON-mode latency doesn't hurt the perceived speed.
+  static String storyQuiz({
+    required String topic,
+    required String level,
+    required String language,
+  }) =>
+      '''
+Generate exactly 3 multiple-choice questions on "$topic" at $level level.
+Language: $language.
+Return ONLY this JSON, first char "{", last char "}":
+{"quiz":[{"question":"...","options":["A","B","C","D"],"correctIndex":0,"explanation":"..."}]}
+Each "question" ≤ 14 words. Each option ≤ 10 words. correctIndex is 0–3.
+''';
+
+  static String _moodOneLiner(String mood) {
+    if (mood.isEmpty) return '';
+    final t = switch (mood) {
+      'calm' => 'Mood: calm — measured pacing.',
+      'hyped' => 'Mood: hyped — punchy, exclamations, fast.',
+      'curious' => 'Mood: curious — surprising connections, what-ifs.',
+      'anxious' => 'Mood: anxious — gentle, reassuring, slow.',
+      'sad' => 'Mood: low — warm, kind, encouraging.',
+      _ => '',
+    };
+    return t.isEmpty ? '' : '\n$t';
+  }
 
   // ── TUTOR AGENT ─────────────────────────────────────────────────────────────
 

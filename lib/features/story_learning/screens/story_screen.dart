@@ -307,6 +307,8 @@ class _StoryScreenState extends State<StoryScreen> {
       (chunk) {
         if (!mounted) return;
         if (chunk.kind == StoryChunkKind.intro) {
+          // Cast + title arrive up front. Scenes start as empty — they
+          // stream in over subsequent tail chunks (one per scene).
           setState(() {
             _story = StoryResponse(
               title: chunk.title ?? _topic,
@@ -314,23 +316,30 @@ class _StoryScreenState extends State<StoryScreen> {
               quiz: const [],
               franchiseCharacters: chunk.characters,
             );
-            _revealedSceneCount = 1;
+            _revealedSceneCount = chunk.scenes.length;
             _phase = _Phase.story;
           });
           _scheduleAutoScroll();
         } else {
-          // Tail chunk — append remaining scenes + quiz onto the existing story.
+          // Tail chunks now arrive one-per-scene (and one final chunk with
+          // just the quiz). Each scene auto-reveals as it lands so the chat
+          // feed feels live, like a WhatsApp group chat. _isGeneratingMore
+          // only flips false once the quiz tail arrives.
           final prev = _story;
           if (prev != null) {
+            final newScenes = [...prev.scenes, ...chunk.scenes];
+            final hasQuiz = chunk.quiz.isNotEmpty;
             setState(() {
               _story = StoryResponse(
                 title: prev.title,
-                scenes: [...prev.scenes, ...chunk.scenes],
-                quiz: chunk.quiz,
+                scenes: newScenes,
+                quiz: hasQuiz ? chunk.quiz : prev.quiz,
                 franchiseCharacters: prev.franchiseCharacters,
               );
-              _isGeneratingMore = false;
+              _revealedSceneCount = newScenes.length;
+              if (hasQuiz) _isGeneratingMore = false;
             });
+            _scheduleAutoScroll();
           }
         }
       },
@@ -1019,7 +1028,8 @@ class _StoryScreenState extends State<StoryScreen> {
       ),
     );
 
-    // Bottom CTA — single big tap target.
+    // Bottom CTA — scenes auto-reveal as they stream, so the only manual
+    // step is the tap that advances to quiz once everything has arrived.
     Widget cta;
     if (allRevealed) {
       cta = NeonButton(
@@ -1028,10 +1038,8 @@ class _StoryScreenState extends State<StoryScreen> {
         colors: [AppTheme.accentCyan, _style.color],
         onTap: _revealNextScene,
       );
-    } else if (hasMore) {
-      cta = _TapToContinuePill(color: _style.color, onTap: _revealNextScene);
     } else {
-      // No more scenes loaded but tail still in flight.
+      // Streaming or quiz still pending. Either way: typing indicator.
       cta = const _WritingPill();
     }
 
@@ -1568,47 +1576,6 @@ class _ChatBubble extends StatelessWidget {
   }
 }
 
-class _TapToContinuePill extends StatelessWidget {
-  const _TapToContinuePill({required this.color, required this.onTap});
-
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          color: color.withAlpha(22),
-          border: Border.all(color: color.withAlpha(110), width: 0.8),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'TAP FOR NEXT',
-              style: GoogleFonts.orbitron(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: color,
-                letterSpacing: 1.4,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Icon(Icons.arrow_downward_rounded, size: 14, color: color),
-          ],
-        ),
-      ).animate(onPlay: (c) => c.repeat()).shimmer(
-            duration: 1800.ms,
-            color: color.withAlpha(60),
-          ),
-    );
-  }
-}
-
 class _WritingPill extends StatelessWidget {
   const _WritingPill();
 
@@ -1635,7 +1602,7 @@ class _WritingPill extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Text(
-            'gemma is writing the rest…',
+            'gemma is typing…',
             style: GoogleFonts.spaceGrotesk(
               fontSize: 11,
               color: AppTheme.textTertiary,

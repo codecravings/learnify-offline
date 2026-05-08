@@ -32,10 +32,10 @@ class GemmaOrchestrator {
 
   // ── STORY AGENT ─────────────────────────────────────────────────────────────
 
-  /// One-shot story generation. Use this when you need the whole story before
-  /// rendering anything (e.g. legacy callers). For the new chat-bubble UI use
-  /// [streamStoryChunks] instead — same total wall-time but the user sees
-  /// the first scenes within seconds instead of waiting for everything.
+  /// One-shot story generation — drains [streamStoryChunks] into a single
+  /// [StoryResponse]. Kept for the few legacy callers that want the whole
+  /// thing at once (e.g. image-scan flow). For the chat-bubble UI use
+  /// [streamStoryChunks] directly so each scene appears as it streams.
   Future<StoryResponse> generateStory({
     required String topic,
     required String style,
@@ -43,69 +43,33 @@ class GemmaOrchestrator {
     String franchiseName = '',
     String level = 'basics',
   }) async {
-    // Resolve franchise: typed object wins, otherwise look up by name.
-    Franchise? f = franchise;
-    if (f == null && franchiseName.isNotEmpty) {
-      f = await FranchiseLoader.instance.findByName(franchiseName);
-    }
+    String title = topic;
+    final scenes = <StoryScene>[];
+    final quiz = <StoryQuizQuestion>[];
+    List<FranchiseCharacter> cast = const [];
 
-    final cast = _buildStoryCast(f);
-    final castIds = cast.map((c) => c.id).toList();
-    final castIdsCsv = castIds.map((id) => '"$id"').join(', ');
-    final castDescription = _castDescriptionForPrompt(f, cast);
-    final mode = (style == 'movie_tv' && f != null) ? 'movieTv' : 'practical';
-
-    final memCtx = await _memory.getStudyContext(topic);
-    await _memory.retainTopicInterest(topic, level: level);
-
-    final systemPrompt = AgentPrompts.story(
+    final stream = streamStoryChunks(
       topic: topic,
+      style: style,
+      franchise: franchise,
+      franchiseName: franchiseName,
       level: level,
-      mode: mode,
-      castDescription: castDescription,
-      castIdsCsv: castIdsCsv,
-      franchise: f,
-      memoryContext: memCtx,
-      language: _lang,
-      mood: _mood,
-      dyslexic: _dyslexic,
     );
 
-    Future<String> run(String userPrompt) => _gemma.generate(
-          systemPrompt: systemPrompt,
-          userPrompt: userPrompt,
-          maxTokens: 4096,
-        );
-
-    String raw = await run(_storyUserPrompt(topic, level, castIdsCsv));
-    debugPrint('[Story] raw 1: ${raw.substring(0, raw.length.clamp(0, 300))}');
-    Map<String, dynamic>? parsed;
-    try {
-      parsed = _parseJson(raw);
-    } catch (_) {
-      // Fall through to retry.
-    }
-
-    if (parsed == null) {
-      raw = await run(
-        'Your previous response was unusable JSON. Topic: "$topic". '
-        'Output ONLY the JSON — no prose, no markdown fences. Start with { and '
-        'end with }. Keep scenes short. characterId MUST be one of $castIdsCsv.',
-      );
-      debugPrint('[Story] raw 2: ${raw.substring(0, raw.length.clamp(0, 300))}');
-      try {
-        parsed = _parseJson(raw);
-      } catch (e) {
-        throw FormatException(
-            'Story JSON parse failed twice. Last response: '
-            '${raw.substring(0, raw.length.clamp(0, 200))}');
+    await for (final chunk in stream) {
+      if (chunk.kind == StoryChunkKind.intro) {
+        title = chunk.title ?? title;
+        cast = chunk.characters;
+      } else {
+        scenes.addAll(chunk.scenes);
+        quiz.addAll(chunk.quiz);
       }
     }
 
-    final scenes = _retagSceneIds(_parseScenes(parsed['scenes']), castIds);
-    final quiz = _parseQuiz(parsed['quiz']);
-    final title = parsed['title'] as String? ?? topic;
-
+    if (scenes.isEmpty) {
+      throw const FormatException(
+          'Could not generate the story. Try again, or pick a simpler topic.');
+    }
     return StoryResponse(
       title: title,
       scenes: scenes,
@@ -114,12 +78,13 @@ class GemmaOrchestrator {
     );
   }
 
-  /// Progressive story generation. Yields a [StoryChunk] each time a piece is
-  /// ready — first an `intro` chunk (title + cast + first 4 scenes) so the UI
-  /// can paint within seconds, then a `tail` chunk (remaining 2 scenes + quiz).
+  /// Streaming story generation — yields one [StoryChunk] (kind=intro) with
+  /// the cast + title up front, then chunks (kind=tail) as each scene
+  /// finishes streaming, then a final tail with the quiz.
   ///
-  /// The user starts reading scene 1 while Gemma is still working on the rest.
-  /// This is THE fix for "small model = slow first paint".
+  /// The model produces plain `Name|emotion|dialogue` lines, parsed
+  /// client-side as tokens arrive. Far faster than JSON on the small E2B
+  /// model — first scene appears in ~5–10s instead of 60–180s.
   Stream<StoryChunk> streamStoryChunks({
     required String topic,
     required String style,
@@ -133,86 +98,138 @@ class GemmaOrchestrator {
     }
 
     final cast = _buildStoryCast(f);
-    final castIds = cast.map((c) => c.id).toList();
-    final castIdsCsv = castIds.map((id) => '"$id"').join(', ');
-    final castDescription = _castDescriptionForPrompt(f, cast);
+    final castNames = cast.map((c) => c.name).toList();
+    final castSummary = AgentPrompts.castSummary(f, castNames);
     final mode = (style == 'movie_tv' && f != null) ? 'movieTv' : 'practical';
 
-    final memCtx = await _memory.getStudyContext(topic);
     await _memory.retainTopicInterest(topic, level: level);
 
     final systemPrompt = AgentPrompts.story(
       topic: topic,
       level: level,
       mode: mode,
-      castDescription: castDescription,
-      castIdsCsv: castIdsCsv,
+      castSummary: castSummary,
       franchise: f,
-      memoryContext: memCtx,
       language: _lang,
       mood: _mood,
       dyslexic: _dyslexic,
     );
 
-    // ── Call A: title + first 4 scenes ───────────────────────────────────
-    final introUser = '''
-Topic: "$topic". Cast: $castIdsCsv.
+    // Title is generated client-side — first letter of topic capitalised.
+    // Avoids a separate Gemma round-trip just for a 2–6 word string.
+    final title = _quickTitle(topic, f);
+    yield StoryChunk.intro(title: title, characters: cast, scenes: const []);
 
-Output ONLY this JSON shape:
-{
-  "title": "2–6 word vibey title",
-  "scenes": [
-    {"characterId":"<one of $castIdsCsv>","emotion":"string","dialogue":"string","narration":"string","conceptTag":"string"}
-  ]
-}
+    // ── Stream the 6 scene lines ─────────────────────────────────────────
+    final scenes = <StoryScene>[];
+    final buffer = StringBuffer();
 
-Rules:
-- Exactly 4 scenes (this is the opening — scenes 1–4 of 6).
-- characterId MUST be one of $castIdsCsv. No new ids.
-- Dialogue ≤ 18 words. Chat-energy. Each scene = one chat message.
-- Build a hook in scene 1, drop one real-world analogy by scene 2, name the term by scene 4.
-''';
-    final intro = await _runStoryJsonRetry('storyIntro', systemPrompt, introUser, castIdsCsv);
-    final introScenes = intro == null
-        ? const <StoryScene>[]
-        : _retagSceneIds(_parseScenes(intro['scenes']), castIds);
-    if (introScenes.isEmpty) {
-      throw const FormatException(
-          'Could not generate the opening scenes. Try again, or pick a simpler topic.');
+    final stream = _gemma.generateStream(
+      systemPrompt: systemPrompt,
+      userPrompt:
+          'Generate the 6-line group chat about "$topic" now. Use the format Name|emotion|dialogue. End with [END].',
+    );
+
+    await for (final token in stream) {
+      buffer.write(token);
+      while (true) {
+        final raw = buffer.toString();
+        final newlineIdx = raw.indexOf('\n');
+        if (newlineIdx < 0) break;
+        final line = raw.substring(0, newlineIdx).trim();
+        buffer
+          ..clear()
+          ..write(raw.substring(newlineIdx + 1));
+
+        if (line.isEmpty) continue;
+        if (line.toUpperCase().contains('[END]')) break;
+
+        final scene = _parsePipeLine(line, cast);
+        if (scene != null) {
+          scenes.add(scene);
+          yield StoryChunk.tail(scenes: [scene], quiz: const []);
+          if (scenes.length >= 6) break;
+        }
+      }
+      if (scenes.length >= 6) break;
     }
-    final title = (intro?['title'] as String?) ?? topic;
-    yield StoryChunk.intro(title: title, characters: cast, scenes: introScenes);
 
-    // ── Call B: scenes 5-6 + quiz ────────────────────────────────────────
-    final priorSummary = _previousScenesSummary(introScenes);
-    final tailUser = '''
-Final part of the lesson. Topic: "$topic". Cast: $castIdsCsv.
+    // Flush any unterminated final line.
+    final tail = buffer.toString().trim();
+    if (scenes.length < 6 && tail.isNotEmpty && !tail.toUpperCase().contains('[END]')) {
+      final scene = _parsePipeLine(tail, cast);
+      if (scene != null) {
+        scenes.add(scene);
+        yield StoryChunk.tail(scenes: [scene], quiz: const []);
+      }
+    }
 
-$priorSummary
+    // ── Quiz: separate small JSON call (fast, ~50 tokens) ────────────────
+    final quiz = await _generateStoryQuiz(topic: topic, level: level);
+    yield StoryChunk.tail(scenes: const [], quiz: quiz);
+  }
 
-Output ONLY this JSON (BOTH keys, in this exact shape):
-{
-  "scenes": [
-    {"characterId":"<one of $castIdsCsv>","emotion":"string","dialogue":"string","narration":"string","conceptTag":"string"}
-  ],
-  "quiz": [
-    {"question":"string","options":["A","B","C","D"],"correctIndex":0,"explanation":"string"}
-  ]
-}
+  /// One scene parsed from a `Name|emotion|dialogue` line. Returns null on
+  /// malformed lines (model preamble, partial output) so the caller can skip.
+  StoryScene? _parsePipeLine(String line, List<FranchiseCharacter> cast) {
+    // Strip leading bullet/quote junk.
+    var l = line.replaceAll(RegExp(r'^["\-•\d.\s]+'), '').trim();
+    if (l.isEmpty) return null;
+    final parts = l.split('|');
+    if (parts.length < 3) return null;
 
-Rules:
-- "scenes" has exactly 2 entries that wrap up the lesson — the curious one says "ohhh I get it" by the end.
-- "quiz" has exactly 3 questions reviewing what was taught.
-- Dialogue ≤ 18 words. Quiz options ≤ 12 words.
-- characterId MUST be one of $castIdsCsv.
-- Do NOT repeat dialogue verbatim from the prior scenes — build on them.
-''';
-    final tail = await _runStoryJsonRetry('storyTail', systemPrompt, tailUser, castIdsCsv);
-    final tailScenes = tail == null
-        ? const <StoryScene>[]
-        : _retagSceneIds(_parseScenes(tail['scenes']), castIds);
-    final tailQuiz = tail == null ? const <StoryQuizQuestion>[] : _parseQuiz(tail['quiz']);
-    yield StoryChunk.tail(scenes: tailScenes, quiz: tailQuiz);
+    final rawName = parts[0].trim();
+    final emotion = parts[1].trim();
+    final dialogue = parts.sublist(2).join('|').trim();
+    if (dialogue.isEmpty) return null;
+
+    // Match name to cast (case-insensitive, fuzzy contains).
+    FranchiseCharacter? hit;
+    final lname = rawName.toLowerCase();
+    for (final c in cast) {
+      if (c.name.toLowerCase() == lname) {
+        hit = c;
+        break;
+      }
+    }
+    hit ??= cast.firstWhere(
+      (c) => lname.contains(c.name.toLowerCase()) ||
+          c.name.toLowerCase().contains(lname),
+      orElse: () => cast.first,
+    );
+
+    return StoryScene(
+      characterId: hit.id,
+      emotion: emotion.isEmpty ? 'neutral' : emotion,
+      dialogue: dialogue,
+    );
+  }
+
+  Future<List<StoryQuizQuestion>> _generateStoryQuiz({
+    required String topic,
+    required String level,
+  }) async {
+    final raw = await _gemma.generate(
+      systemPrompt: AgentPrompts.storyQuiz(
+        topic: topic,
+        level: level,
+        language: _lang,
+      ),
+      userPrompt: 'Output the JSON now.',
+    );
+    try {
+      final parsed = _parseJson(raw);
+      return _parseQuiz(parsed['quiz']);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  String _quickTitle(String topic, Franchise? f) {
+    final cap = topic.isEmpty
+        ? 'Chat'
+        : topic[0].toUpperCase() + topic.substring(1);
+    return f == null ? cap : '$cap · ${f.name}';
   }
 
   // ── FEYNMAN MODE (kid teaches the franchise character) ────────────────────
@@ -391,92 +408,6 @@ You are about to receive a turn instruction telling you what to do next. Follow 
         .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
         .replaceAll(RegExp(r'^_+|_+$'), '');
     return cleaned.isEmpty ? fallback : cleaned;
-  }
-
-  /// Plain id → name mapping for the prompt. When a franchise is set, voice
-  /// and vibe details live in `_franchisePersonaBlock` — keeping them here too
-  /// duplicates ~200 tokens of styling and was a contributing factor to the
-  /// LiteRT-LM mid-generation OOM. So this stays minimal in either branch.
-  String _castDescriptionForPrompt(
-    Franchise? franchise,
-    List<FranchiseCharacter> cast,
-  ) {
-    final lines = cast.map((c) => '- id "${c.id}" — ${c.name} (${c.role})');
-    return 'Cast (use these ids in characterId):\n${lines.join('\n')}';
-  }
-
-  /// Coerce any characterId in [scenes] that doesn't match the locked cast
-  /// to the first available cast id. Prevents Gemma from inventing new ids.
-  List<StoryScene> _retagSceneIds(List<StoryScene> scenes, List<String> castIds) {
-    if (castIds.isEmpty) return scenes;
-    final allowed = castIds.toSet();
-    return [
-      for (final s in scenes)
-        allowed.contains(s.characterId)
-            ? s
-            : StoryScene(
-                characterId: castIds.first,
-                emotion: s.emotion,
-                dialogue: s.dialogue,
-                narration: s.narration,
-                conceptTag: s.conceptTag,
-              ),
-    ];
-  }
-
-  String _previousScenesSummary(List<StoryScene> scenes) {
-    if (scenes.isEmpty) return 'This is the opening — no prior scenes.';
-    final buf = StringBuffer(
-        'Already shown (${scenes.length} scenes — DO NOT repeat these lines):\n');
-    for (var i = 0; i < scenes.length; i++) {
-      final s = scenes[i];
-      final line = s.dialogue.length > 90
-          ? '${s.dialogue.substring(0, 90)}…'
-          : s.dialogue;
-      buf.writeln('${i + 1}. ${s.characterId}: "$line"');
-    }
-    return buf.toString();
-  }
-
-  Future<Map<String, dynamic>?> _runStoryJsonRetry(
-    String tag,
-    String systemPrompt,
-    String userPrompt,
-    String castIdsCsv,
-  ) async {
-    Future<String> run(String user) => _gemma.generate(
-          systemPrompt: systemPrompt,
-          userPrompt: user,
-          maxTokens: 4096,
-        );
-
-    String raw = await run(userPrompt);
-    debugPrint('[Story.$tag] raw 1 length=${raw.length}');
-    Map<String, dynamic>? parsed;
-    try {
-      parsed = _parseJson(raw);
-    } catch (_) {}
-    if (parsed != null) return parsed;
-
-    raw = await run(
-      'Previous response was unusable. Output ONLY a JSON object that matches '
-      'the schema I described — no prose, no markdown, no wrapper key. Start '
-      'with { and end with }. characterId MUST be one of $castIdsCsv.',
-    );
-    debugPrint('[Story.$tag] raw 2 length=${raw.length}');
-    try {
-      return _parseJson(raw);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  List<StoryScene> _parseScenes(dynamic raw) {
-    if (raw is! List) return const [];
-    return raw
-        .whereType<Map>()
-        .map((m) => StoryScene.fromJson(Map<String, dynamic>.from(m)))
-        .toList();
   }
 
   List<StoryQuizQuestion> _parseQuiz(dynamic raw) {
@@ -859,15 +790,6 @@ Language: $_lang. Respond in $_lang.
   }
 
   // ── HELPERS ──────────────────────────────────────────────────────────────────
-
-  String _storyUserPrompt(String topic, String level, String castIdsCsv) {
-    return '''
-Topic: "$topic". Level: $level. Cast: $castIdsCsv.
-
-Output ONLY the JSON described in the system prompt — title + 6 scenes + 3 quiz questions.
-characterId MUST be one of $castIdsCsv. Chat-energy. Dialogue ≤ 18 words.
-''';
-  }
 
   Map<String, dynamic> _parseJson(String raw) {
     final decoded = _parseJsonAny(raw);
