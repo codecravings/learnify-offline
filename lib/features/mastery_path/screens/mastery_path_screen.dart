@@ -332,7 +332,9 @@ class _Header extends StatelessWidget {
                   Icon(Icons.schedule_rounded, color: gold, size: 12),
                   const SizedBox(width: 4),
                   Text(
-                    '~$estimatedMinutes min',
+                    estimatedMinutes >= 60
+                        ? '~${(estimatedMinutes / 60).toStringAsFixed(1)} h'
+                        : '~$estimatedMinutes min',
                     style: GoogleFonts.orbitron(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
