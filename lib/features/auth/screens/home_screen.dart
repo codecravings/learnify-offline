@@ -277,11 +277,10 @@ class _HomeDashboardState extends State<HomeDashboard>
                     .fadeIn(delay: 60.ms, duration: 600.ms)
                     .slideY(begin: 0.04, duration: 600.ms),
                 const SizedBox(height: 18),
-                _buildScanTextbookCard()
-                    .animate()
-                    .fadeIn(delay: 120.ms, duration: 600.ms)
-                    .slideY(begin: 0.04, duration: 600.ms),
-                const SizedBox(height: 18),
+                // Scan Textbook card removed: the .litertlm build of E2B
+                // can't take images directly, and the OCR fallback couldn't
+                // reliably read photographed pages well enough to be useful.
+                // Code lives at /scan + ScanTextbookScreen if we revive it.
                 _buildStudyPulseCard()
                     .animate()
                     .fadeIn(delay: 180.ms, duration: 600.ms)
@@ -598,87 +597,6 @@ class _HomeDashboardState extends State<HomeDashboard>
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(color: c, width: width),
       );
-
-  // ── Scan Textbook (multimodal wow) ─────────────────────────────────────────
-
-  Widget _buildScanTextbookCard() {
-    return GestureDetector(
-      onTap: () => context.push('/scan'),
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          gradient: LinearGradient(
-            colors: [
-              AppTheme.accentPurple.withAlpha(50),
-              AppTheme.accentCyan.withAlpha(30),
-            ],
-          ),
-          border: Border.all(color: AppTheme.accentPurple.withAlpha(120)),
-          boxShadow: [
-            BoxShadow(
-              color: AppTheme.accentPurple.withAlpha(40),
-              blurRadius: 20,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                gradient: const LinearGradient(
-                  colors: [AppTheme.accentPurple, AppTheme.accentMagenta],
-                ),
-              ),
-              child: const Icon(Icons.document_scanner_rounded,
-                  color: Colors.white, size: 28),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          'SCAN TEXTBOOK',
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.orbitron(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                            letterSpacing: 2,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      _pill('NEW', AppTheme.accentGold),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Photograph any page — Gemma reads it & teaches it.',
-                    style: GoogleFonts.spaceGrotesk(
-                      fontSize: 12,
-                      color: Colors.white.withAlpha(220),
-                      height: 1.3,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.arrow_forward_ios_rounded,
-                color: Colors.white70, size: 14),
-          ],
-        ),
-      ),
-    );
-  }
 
   // ── Study Pulse (Learner Twin) ─────────────────────────────────────────────
 
