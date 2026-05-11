@@ -11,7 +11,7 @@ This repo was previously a cloud-AI + Firebase app (DeepSeek/Groq/Hindsight, Fir
 - **Profiles:** Local-only via `LocalProfileService` — name/grade/language/mood/dyslexic-mode/tts-flag, multiple profiles supported. No login, no password.
 - **Memory:** `LocalMemoryService` replaces Hindsight — same "retrieve past events → inject into prompt" pattern, but reads from SQLite.
 
-The legacy Firebase Functions tree (`functions/`) is still on disk but not wired in. Treat as dead weight — don't extend it.
+The legacy Firebase Functions tree (`functions/`) is still on disk but not wired in. Treat as dead weight — don't extend it. Same goes for `lib/core/config/api_keys.dart` — it still defines `groqApiKey` / `hindsightApiKey` / `deepseekApiKey` constants pointing at cloud base URLs from the pre-pivot era. Nothing imports it. Don't wire it back up; if anything, delete it on sight.
 
 ### The simplification pivot (Story-first)
 
@@ -55,7 +55,7 @@ E2B is the only supported model. Don't reintroduce E4B variant-switching without
 
 - `minSdk = 31` (hard requirement for LiteRT-LM)
 - `androidResources.noCompress += ["tflite", "litertlm", "task", "bin"]` — model files must be stored uncompressed for mmap
-- `applicationId = "com.vidyasetu.vidyasetu"` — don't rename; the documented sideload path depends on this exact value
+- `applicationId = "com.vidyasetu.vidyasetu"` — don't rename; the documented sideload path depends on this exact value. The user-facing brand is **Learnify** (see `README.md`), but `pubspec.yaml`'s `name: vidyasetu` and the Android applicationId are intentionally the legacy package identifier — leave them alone.
 - Java 17
 
 ### Analyzer config
