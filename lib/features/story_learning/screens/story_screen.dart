@@ -68,6 +68,10 @@ class _StoryScreenState extends State<StoryScreen> {
   // True while the tail-chunk Gemma call is still in flight (so the UI can
   // show a subtle "writing..." pill if the user reaches the bottom early).
   bool _isGeneratingMore = false;
+  // Set while a manual quiz-retry is in flight, so the screen can swap the
+  // CTA to a disabled "GENERATING…" state without trying to fire a second
+  // overlapping call.
+  bool _retryingQuiz = false;
   StreamSubscription<StoryChunk>? _streamSub;
   // Stagger reveal: scenes arrive from Gemma in bursts, but we expose them
   // to the UI one at a time on a fixed cadence so the chat feels live (and
@@ -82,6 +86,10 @@ class _StoryScreenState extends State<StoryScreen> {
   int _questionIndex = 0;
   int _correctCount = 0;
   final List<String> _missedQuestions = [];
+  // Concept tags for the questions the learner got wrong, used by Companion
+  // weak-area surfacing. Set (not List) so a concept tested in two questions
+  // doesn't double-count when it's missed both times.
+  final Set<String> _missedConcepts = <String>{};
   int? _selectedOption;
   bool _showExplanation = false;
 
@@ -463,6 +471,73 @@ class _StoryScreenState extends State<StoryScreen> {
     });
   }
 
+  /// Manual retry when the orchestrator's quiz call came back empty. We
+  /// hit the orchestrator again with a fresh `regenerateStoryQuiz` —
+  /// independent of the story stream lifecycle — and splice the result
+  /// into the existing `_story.quiz` so the regular "ONE LAST CHECK" CTA
+  /// can take over once questions arrive.
+  Future<void> _retryQuiz() async {
+    final story = _story;
+    if (story == null || _retryingQuiz) return;
+    setState(() => _retryingQuiz = true);
+    try {
+      final qs = await _orchestrator.regenerateStoryQuiz(
+        topic: _topic,
+        level: _level,
+      );
+      if (!mounted) return;
+      if (qs.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Still couldn\'t generate a quiz. '
+              'Skip the quiz to finish the lesson.'),
+          duration: Duration(seconds: 4),
+        ));
+      } else {
+        setState(() {
+          _story = StoryResponse(
+            title: story.title,
+            scenes: story.scenes,
+            quiz: qs,
+            franchiseCharacters: story.franchiseCharacters,
+          );
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Quiz retry failed: $e'),
+        duration: const Duration(seconds: 4),
+      ));
+    } finally {
+      if (mounted) setState(() => _retryingQuiz = false);
+    }
+  }
+
+  /// User chose to skip the quiz when generation failed. Persist a
+  /// zero-question result so the streak still ticks (they did watch the
+  /// full lesson) but we don't fabricate a wrong score against them.
+  Future<void> _finishWithoutQuiz() async {
+    final story = _story;
+    if (story == null) return;
+    final concepts = story.scenes
+        .map((s) => s.conceptTag)
+        .whereType<String>()
+        .toSet()
+        .toList();
+    await _memory.retainQuizResult(
+      topic: _topic,
+      level: _level,
+      style: _style.promptKey,
+      score: 0,
+      total: 0,
+      concepts: concepts,
+      pathTopicKey: widget.pathTopicKey,
+      pathStepIndex: widget.pathStepIndex,
+    );
+    await _profile.updateStreak((_profile.currentProfile?.streak ?? 0) + 1);
+    if (mounted) setState(() => _phase = _Phase.results);
+  }
+
   /// Advances from the chat to the quiz. The reveal timer handles
   /// scene-by-scene reveals on its own now, so this is purely the
   /// "ONE LAST CHECK" CTA handler.
@@ -487,6 +562,9 @@ class _StoryScreenState extends State<StoryScreen> {
         _correctCount++;
       } else {
         _missedQuestions.add(question.question);
+        if (question.concept.isNotEmpty) {
+          _missedConcepts.add(question.concept);
+        }
       }
     });
   }
@@ -520,6 +598,7 @@ class _StoryScreenState extends State<StoryScreen> {
       total: total,
       missedQuestions: _missedQuestions,
       concepts: concepts,
+      missedConcepts: _missedConcepts.toList(),
       pathTopicKey: widget.pathTopicKey,
       pathStepIndex: widget.pathStepIndex,
     );
@@ -1126,6 +1205,9 @@ class _StoryScreenState extends State<StoryScreen> {
 
     // Bottom CTA — scenes auto-reveal as they stream, so the only manual
     // step is the tap that advances to quiz once everything has arrived.
+    final streamFinished = !_isGeneratingMore && !hasMore;
+    final quizMissing = streamFinished && story.quiz.isEmpty;
+
     Widget cta;
     if (allRevealed) {
       cta = NeonButton(
@@ -1133,6 +1215,36 @@ class _StoryScreenState extends State<StoryScreen> {
         icon: Icons.quiz_rounded,
         colors: [AppTheme.accentCyan, _style.color],
         onTap: _startQuiz,
+      );
+    } else if (quizMissing) {
+      // Stream is done but the quiz call returned empty (small-model JSON
+      // failure or KV-cache bleed from the long story stream). Don't strand
+      // the user on a typing pill — let them either retry the quiz or
+      // close the lesson without one.
+      cta = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          NeonButton(
+            label: _retryingQuiz ? 'GENERATING…' : 'TRY QUIZ AGAIN',
+            icon: Icons.refresh_rounded,
+            colors: [AppTheme.accentCyan, _style.color],
+            isLoading: _retryingQuiz,
+            onTap: () => _retryQuiz(),
+          ),
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: _finishWithoutQuiz,
+            child: Text(
+              'Skip quiz · finish lesson →',
+              style: GoogleFonts.spaceGrotesk(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.accentCyan,
+                letterSpacing: 0.4,
+              ),
+            ),
+          ),
+        ],
       );
     } else {
       // Streaming or quiz still pending. Either way: typing indicator.
@@ -1470,6 +1582,7 @@ class _StoryScreenState extends State<StoryScreen> {
               _revealedSceneCount = 0;
               _correctCount = 0;
               _missedQuestions.clear();
+              _missedConcepts.clear();
             });
           },
           child: Text(
