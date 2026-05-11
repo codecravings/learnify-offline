@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../core/ai/gemma_service.dart';
 import '../core/services/local_profile_service.dart';
+import '../features/setup/screens/bootstrap_screen.dart';
 import '../features/setup/screens/model_download_screen.dart';
 import '../features/setup/screens/profile_setup_screen.dart';
 import '../features/auth/screens/home_screen.dart';
@@ -18,6 +19,9 @@ import '../core/franchises/franchise_loader.dart';
 abstract class AppRoutes {
   static const String setup = '/setup';
   static const String setupProfile = '/setup/profile';
+  /// Cold-launch warm-up splash — runs the heavy `resumeIfInstalled` flow
+  /// with a real progress bar instead of a mute black native splash.
+  static const String setupBootstrap = '/setup/bootstrap';
   static const String home = '/home';
   static const String lesson = '/lesson';
   static const String feynman = '/feynman';
@@ -33,15 +37,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     redirect: (BuildContext context, GoRouterState state) {
       final hasProfile = LocalProfileService.instance.hasProfile;
       final modelReady = GemmaService.instance.isReady;
+      final hasFile = GemmaService.instance.hasSideloadedFileSync;
       final loc = state.matchedLocation;
 
-      // Always allow setup screens
+      // Already on a setup-flow screen — let the screen drive transitions.
       if (loc.startsWith('/setup')) return null;
 
-      // Model must be loaded before any feature screen — if a cold relaunch
-      // couldn't resume it (e.g. flutter_gemma registry wiped but file still
-      // on disk), bounce back to setup so the user can re-import instantly.
-      if (!modelReady) return AppRoutes.setup;
+      // Model not yet warmed in this process. If a model file is on disk,
+      // route through the bootstrap splash (with progress bar). Otherwise
+      // hand off to the download screen.
+      if (!modelReady) {
+        return hasFile ? AppRoutes.setupBootstrap : AppRoutes.setup;
+      }
 
       // Model ready but no profile yet
       if (!hasProfile) return AppRoutes.setupProfile;
@@ -53,6 +60,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.setup,
         builder: (_, _) => const ModelDownloadScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.setupBootstrap,
+        builder: (_, _) => const BootstrapScreen(),
       ),
       GoRoute(
         path: AppRoutes.setupProfile,
