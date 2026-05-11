@@ -9,12 +9,19 @@ class StoryQuizQuestion {
     required this.options,
     required this.correctIndex,
     required this.explanation,
+    this.concept = '',
   });
 
   final String question;
   final List<String> options;
   final int correctIndex;
   final String explanation;
+
+  /// Concept tag this question tests. Used by the Companion's weak-area
+  /// surfacing so the Study Pulse / Mastery Path can target what the user
+  /// actually got wrong, not just remember which question wording stumped
+  /// them. Empty string when the model omits it.
+  final String concept;
 
   factory StoryQuizQuestion.fromJson(Map<String, dynamic> json) {
     return StoryQuizQuestion(
@@ -25,6 +32,7 @@ class StoryQuizQuestion {
           [],
       correctIndex: json['correctIndex'] as int? ?? 0,
       explanation: json['explanation'] as String? ?? '',
+      concept: (json['concept'] as String? ?? '').trim(),
     );
   }
 }
