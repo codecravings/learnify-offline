@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'model_downloader.dart';
+
 /// Wraps flutter_gemma for on-device Gemma 4 E2B inference.
 ///
 /// Model: litert-community/gemma-4-E2B-it-litert-lm (~2.58 GB, downloaded once)
@@ -18,11 +20,32 @@ class GemmaService {
 
   static const _modelId = 'gemma-4-E2B-it.litertlm';
 
+  /// The HuggingFace URL we download from. Exposed so the setup screen can
+  /// look up an in-flight `flutter_downloader` task and auto-resume.
+  static String get modelUrl => _modelUrl;
+
+  /// The on-disk filename used by both the network download and the
+  /// sideload sniff. Exposed for the same reason as [modelUrl].
+  static String get modelFileName => _modelId;
+
   static const _hfToken =
       String.fromEnvironment('HF_TOKEN', defaultValue: '');
 
   bool _modelReady = false;
   bool get isReady => _modelReady;
+
+  /// Synchronously-readable cache of `hasSideloadedFile()`. Populated once
+  /// during app bootstrap so the GoRouter redirect (which is sync) can decide
+  /// whether to send the user to the model-download screen or to the warm-up
+  /// splash without awaiting a filesystem call on every navigation.
+  bool _hasSideloadedFileCached = false;
+  bool get hasSideloadedFileSync => _hasSideloadedFileCached;
+
+  /// Run once at app startup. Cheap (one or two `File.exists()` calls) so
+  /// running it before `runApp()` adds at most a handful of milliseconds.
+  Future<void> precomputeHasSideloadedFile() async {
+    _hasSideloadedFileCached = await hasSideloadedFile();
+  }
 
   /// Single token ceiling for ALL text generation calls. Varying maxTokens
   /// across calls forces flutter_gemma to rebuild the InferenceModel, which
@@ -48,16 +71,27 @@ class GemmaService {
   /// model is "installed" we need to re-run installModel() + getActiveModel()
   /// every launch. Falls through to a silent re-import from the local file
   /// when one is present so the user doesn't have to tap Import again.
-  Future<void> resumeIfInstalled() async {
-    if (_modelReady) return;
+  Future<void> resumeIfInstalled({
+    void Function(double percent)? onProgress,
+    void Function(String label)? onStatus,
+  }) async {
+    if (_modelReady) {
+      onProgress?.call(100);
+      return;
+    }
     try {
-      // Fast path — already installed, just warm the engine.
+      // Fast path — already installed, just warm the engine. Report a single
+      // "warming" status because there's nothing granular to show during
+      // getActiveModel.
       if (await FlutterGemma.isModelInstalled(_modelId)) {
         try {
+          onStatus?.call('Warming up engine (10–30 s)…');
+          onProgress?.call(50);
           await FlutterGemma.getActiveModel(maxTokens: 2048);
           _modelReady = FlutterGemma.hasActiveModel();
           if (_modelReady) {
             debugPrint('[Gemma] Resumed installed model (fast path)');
+            onProgress?.call(100);
             return;
           }
         } catch (e) {
@@ -68,10 +102,22 @@ class GemmaService {
       // Fallback — re-import from the local file (idempotent, skips copy).
       if (await findSideloadedFile() != null) {
         debugPrint('[Gemma] Resuming via full init from local file...');
-        await initializeFromFile();
+        await initializeFromFile(onProgress: (p) {
+          if (p < 70) {
+            onStatus?.call('Copying model to app storage…');
+          } else if (p < 80) {
+            onStatus?.call('Registering model…');
+          } else if (p < 100) {
+            onStatus?.call('Warming up engine (10–30 s)…');
+          } else {
+            onStatus?.call('Ready!');
+          }
+          onProgress?.call(p);
+        });
       }
     } catch (e) {
       debugPrint('[Gemma] resumeIfInstalled failed: $e');
+      rethrow;
     }
   }
 
@@ -193,25 +239,54 @@ class GemmaService {
   }
 
   /// Call from the setup screen to download + activate the model.
-  /// [onProgress] receives 0–100 download percentage.
+  ///
+  /// Three phases, all reported through [onProgress] as 0–100:
+  ///   * 0–90  — `flutter_downloader` background download (resumable, survives
+  ///             screen-lock). Saves to the SAME path our sideload-detector
+  ///             checks, so a future cold launch silently re-installs.
+  ///   * 90–95 — flutter_gemma `installModel().fromFile().install()` to register
+  ///             the file with the LiteRT-LM runtime.
+  ///   * 95–100 — `getActiveModel()` warms the engine (mmap + GPU init +
+  ///             KV-cache prefill) so the very next inference call is instant.
+  ///
+  /// On completion the model is ready for inference immediately — no app
+  /// restart, no extra tap. If the download was already complete from a
+  /// previous run, this short-circuits straight to the install + warm phase.
   Future<void> initialize({void Function(double)? onProgress}) async {
     if (_modelReady) return;
 
-    // install() is idempotent — skips the download if already installed
-    // but always sets the active session for this process.
-    await FlutterGemma.installModel(
-      modelType: ModelType.gemmaIt,
-      fileType: ModelFileType.litertlm,
-    )
-        .fromNetwork(
-          _modelUrl,
-          token: _hfToken.isNotEmpty ? _hfToken : null,
-        )
-        .withProgress((p) => onProgress?.call(p.toDouble()))
-        .install();
+    // Save into the app's internal documents dir. Two reasons:
+    //  1) Android 13+ scoped storage blocks `Directory.create()` on the
+    //     external `/storage/emulated/0/Android/data/<pkg>/files` path even
+    //     for our own scoped dir, when the path is constructed as a raw
+    //     string instead of via path_provider.
+    //  2) `findSideloadedFile()` already checks this internal path first, so
+    //     a partial-download survivor or completed file is auto-picked up by
+    //     the silent-resume on the next cold launch.
+    final savedDir = (await getApplicationDocumentsDirectory()).path;
 
-    await FlutterGemma.getActiveModel(maxTokens: 2048);
-    _modelReady = FlutterGemma.hasActiveModel();
+    final downloadedPath = await ModelDownloader.instance.downloadModel(
+      url: _modelUrl,
+      savedDir: savedDir,
+      fileName: _modelId,
+      token: _hfToken.isNotEmpty ? _hfToken : null,
+      // Map 0..100 download progress into the 0..90 band.
+      onProgress: (p) => onProgress?.call(p * 0.90),
+    );
+    debugPrint('[Gemma] Download landed at $downloadedPath');
+
+    // Hand off to the same install + warm flow as a sideloaded file. Reuses
+    // _ensureLocalCopy so the model is mmap'd from internal storage (sdcard
+    // mmap is flaky on Android).
+    onProgress?.call(91);
+    await initializeFromFile(
+      filePath: downloadedPath,
+      onProgress: (p) {
+        // initializeFromFile reports 0..100 across copy + register + warm.
+        // Compress that into the 91..100 band of the outer progress.
+        onProgress?.call(91 + (p / 100) * 9);
+      },
+    );
     debugPrint('[Gemma] Model ready: $_modelReady');
   }
 
@@ -286,32 +361,6 @@ class GemmaService {
       await Future.delayed(const Duration(milliseconds: 250));
       return FlutterGemma.getActiveModel(maxTokens: _textMaxTokens);
     }
-  }
-
-  /// Multimodal generation — send an image + text prompt.
-  Future<String> generateFromImage({
-    required Uint8List imageBytes,
-    required String prompt,
-    String systemPrompt = '',
-  }) async {
-    _assertReady();
-    final model = await FlutterGemma.getActiveModel(
-      maxTokens: 2048,
-      supportImage: true,
-    );
-    final chat = await model.createChat(
-      supportImage: true,
-      systemInstruction: systemPrompt.isNotEmpty ? systemPrompt : null,
-    );
-
-    await chat.addQueryChunk(Message.withImage(
-      text: prompt,
-      imageBytes: imageBytes,
-      isUser: true,
-    ));
-
-    final response = await chat.generateChatResponse();
-    return _extractText(response);
   }
 
   /// Creates a persistent multi-turn chat for the Study Companion.
