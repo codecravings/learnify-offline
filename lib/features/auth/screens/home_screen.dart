@@ -511,7 +511,7 @@ class _HomeDashboardState extends State<HomeDashboard>
           ),
           const SizedBox(height: 10),
           Text(
-            'Type any topic. Gemma 4 crafts a story lesson — fully offline.',
+            'Type any topic. Gemma 4 builds a stepped mastery path — fully offline.',
             style: GoogleFonts.spaceGrotesk(
               fontSize: 12,
               color: AppTheme.textSecondary,
@@ -546,12 +546,12 @@ class _HomeDashboardState extends State<HomeDashboard>
                         horizontal: 16, vertical: 12),
                   ),
                   textInputAction: TextInputAction.go,
-                  onSubmitted: (_) => _launchCustomTopic(),
+                  onSubmitted: (_) => _launchMasteryPath(),
                 ),
               ),
               const SizedBox(width: 10),
               GestureDetector(
-                onTap: _launchCustomTopic,
+                onTap: _launchMasteryPath,
                 child: Container(
                   width: 46,
                   height: 46,
@@ -561,7 +561,7 @@ class _HomeDashboardState extends State<HomeDashboard>
                       colors: [AppTheme.accentPurple, AppTheme.accentCyan],
                     ),
                   ),
-                  child: const Icon(Icons.arrow_forward_rounded,
+                  child: const Icon(Icons.route_rounded,
                       color: Colors.white, size: 22),
                 ),
               ),
@@ -569,15 +569,15 @@ class _HomeDashboardState extends State<HomeDashboard>
           ),
           const SizedBox(height: 10),
           GestureDetector(
-            onTap: _launchMasteryPath,
+            onTap: _launchCustomTopic,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.route_rounded,
+                Icon(Icons.bolt_rounded,
                     size: 14, color: AppTheme.accentCyan.withAlpha(200)),
                 const SizedBox(width: 6),
                 Text(
-                  'Build mastery path instead →',
+                  'Skip the path · just chat about it →',
                   style: GoogleFonts.spaceGrotesk(
                     fontSize: 11.5,
                     fontWeight: FontWeight.w600,
