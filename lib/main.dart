@@ -17,21 +17,15 @@ Future<void> main() async {
   // tries to enqueue a model download.
   await FlutterDownloader.initialize(debug: kDebugMode);
 
-  // Initialize flutter_gemma runtime, then warm an already-installed
-  // model if one exists (so cold relaunches skip /setup). If a sideloaded
-  // file is present but not installed yet, silently install it now so the
-  // user is never sent to /setup just because they pushed the file via adb.
+  // Initialize flutter_gemma runtime (fast — just registers native bindings).
+  // The expensive `resumeIfInstalled` / `initializeFromFile` calls used to
+  // run here too, blocking `runApp()` for ~48 s while the user stared at a
+  // mute black native splash. Those are now run from BootstrapScreen so the
+  // user sees a branded progress bar from the very first frame.
   await GemmaService.instance.bootstrap();
-  await GemmaService.instance.resumeIfInstalled();
-  if (!GemmaService.instance.isReady &&
-      await GemmaService.instance.hasSideloadedFile()) {
-    try {
-      await GemmaService.instance.initializeFromFile();
-    } catch (_) {
-      // Fall through — router will send the user to /setup where they can
-      // retry manually and see the real error.
-    }
-  }
+  // Sync-readable cache so the GoRouter redirect can decide between the
+  // bootstrap splash and the download screen without awaiting a File.exists.
+  await GemmaService.instance.precomputeHasSideloadedFile();
 
   // Load saved profile (replaces Firebase Auth state)
   await LocalProfileService.instance.initialize();
