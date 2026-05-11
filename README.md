@@ -43,16 +43,16 @@ Your tutor, planner, storyteller, and study companion live **inside your phone**
 
 ## 💬 Story Learning — like a group chat, not a textbook
 
-The flagship moment. Type any topic, pick a vibe, and the lesson arrives as a real chat conversation between 2–3 characters reacting, joking, paraphrasing, getting it wrong, then getting it right.
+The flagship moment. Type any topic, pick a vibe, and the lesson arrives as a real chat conversation between 2 characters reacting, joking, paraphrasing, getting it wrong, then getting it right.
 
 🎭 Two modes:
 
 * 🛠 **Practical** — friend-group chat, daily-life examples *("bro why do bikes skid in the rain?" / "less friction" / "wait so friction is actually GOOD??")*
 * 🎬 **Movie / TV** — pick from **80 franchises** (anime, cartoons, K-drama, gaming, Indian TV, movies). Naruto, Stranger Things, Money Heist, Goku, Walter White, MS Dhoni, Itachi… they teach in their own voice.
 
-⚡ **Progressive generation**: scenes 1–4 paint within seconds while Gemma writes the rest in the background — the small on-device model never feels slow.
+⚡ **Wave-based generation**: the first 6 scenes stream in, then up to 2 more continuation waves push the lesson to 16–18 messages — depth without the small model getting overwhelmed by a single mega-prompt. Each wave re-injects the persona block so cast voices don't drift.
 
-🔁 Each message auto-reveals on a 1.3 s typing-pill cadence (like a real chat), scrolls into a chat feed, and the cast + speaker order is locked in code so Gemma can't drift off-character or monologue as one person.
+🔁 Each message auto-reveals on a 1.7 s typing-pill cadence (like a real chat), scrolls into a chat feed, and the cast + speaker order is locked in code so Gemma can't drift off-character or monologue as one person. We also filter out mascot characters (Pikachu, etc.) at cast-build time — they have rich voice samples but can't carry a teaching dialogue in English.
 
 ---
 
@@ -71,20 +71,13 @@ Every chat compounds — it doesn't reset between sessions. Every quiz, every mo
 
 ---
 
-## 🗺 Mastery Path — Duolingo-style spine
+## 🗺 Mastery Path — the primary entry point
 
-Type a topic → Gemma decomposes it into 5–7 progressive steps with concept tags + difficulty. Each step is one short story (~3 minutes). Tiny wins, visible progress, ticks fill in as you pass each step at ≥70% accuracy.
+Type any topic into **Learn Anything** and the default action now builds a Duolingo-style stepped path: **4 steps at basics**, **7 at intermediate**, **11 at advanced**. Each step has concept tags + a difficulty badge, and ticks fill in as you pass at ≥70% accuracy.
 
----
+Each step is one short stepped story. Want a single throwaway chat instead? The chip below the input — *"Skip the path · just chat about it →"* — bypasses the path and goes straight to a one-shot lesson.
 
-## 📸 Scan Any Textbook Page
-
-Point your camera at a page... and magic begins ✨
-
-📚 Detects chapter + topic
-🧩 Extracts concepts
-🎯 Generates the same chat-style lesson instantly
-🗣 In your level + language
+🪶 **Mastery generation has belt-and-braces JSON parsing**: tight prompt → schema-shape validation → retry with key-names spelled out → last-resort prose salvage that extracts "Stage N: title" headings from any markdown the model emits. The user never sees a dead end.
 
 ---
 
@@ -149,15 +142,16 @@ flutter run -d <DEVICE_ID>
 flutter run -d <DEVICE_ID> --dart-define=HF_TOKEN=<token>
 ```
 
-### 📦 Sideload the model (no token needed)
+### 📥 Three ways to get the model on device
 
-```bash
-# Once you have gemma-4-E2B-it.litertlm locally:
-adb push gemma-4-E2B-it.litertlm \
-  /storage/emulated/0/Android/data/com.vidyasetu.vidyasetu/files/
-
-# Then on first launch tap "Import from device".
-```
+1. **In-app download** (recommended) — tap *Download Gemma 4 E2B* on first launch. The download runs in the background via `flutter_downloader` with a system notification, survives screen-lock / app-backgrounding, and resumes on partial network drops. On completion the engine auto-installs and warms — no second tap.
+2. **Sideload via ADB** — if you already have the `.litertlm`:
+   ```bash
+   adb push gemma-4-E2B-it.litertlm \
+     /storage/emulated/0/Android/data/com.vidyasetu.vidyasetu/files/
+   ```
+   First launch detects the file and silently imports + warms it. You'll see the new **BootstrapScreen** (branded splash + progress bar + status text) rather than the old mute black splash.
+3. **Pick from device** — if the file is sitting in Downloads or shared from another app, tap *"Pick a .litertlm file from your device"* on the setup screen. Works for files anywhere `image_picker` / `file_picker` can read.
 
 ### 📱 Device Requirements
 
@@ -169,10 +163,11 @@ adb push gemma-4-E2B-it.litertlm \
 
 # 🎉 First Launch Experience
 
-1️⃣ Pick a model: download (~2.58 GB) or sideload from device
-2️⃣ Enter name + grade + language
-3️⃣ Optionally toggle dyslexia-friendly mode + read-aloud
-4️⃣ Done forever ✅
+1️⃣ Pick a model: background download (~2.58 GB), ADB sideload, or browser-download + file picker
+2️⃣ Wait through the **BootstrapScreen** (progress bar + status) while LiteRT-LM warms the engine — ~25 s on a mid-range Android, ~50 s if it's also copying from sdcard
+3️⃣ Enter name + grade + language
+4️⃣ Optionally toggle dyslexia-friendly mode + read-aloud
+5️⃣ Done forever ✅
 
 After that:
 
@@ -222,14 +217,14 @@ One Gemma model in RAM. Identity = system prompt. The orchestrator routes intent
 
 ```text
 User → GemmaOrchestrator
-   ├── 📖 Story            (chat-bubble lessons, franchise persona)
+   ├── 📖 Story            (16–18-scene chat lessons via wave continuations)
    ├── 🧠 Tutor            (concept explanation)
-   ├── ❓ Quiz             (targeted questions, weak-area aware)
+   ├── ❓ Quiz             (5 questions w/ concept tags, weak-area aware)
    ├── 📅 Planner          (7-day study schedule)
    ├── 🔍 Explorer         (sub-topic decomposition)
-   ├── 🗺 Mastery          (5–7 step progressive paths)
-   ├── 👤 Learner Twin     (Companion chat with memory)
-   ├── 📷 Image Analysis   (textbook scan)
+   ├── 🗺 Mastery          (4 / 7 / 11 step paths, JSON-strict + prose salvage)
+   ├── 👤 Learner Twin     (Companion chat, names recent weak concepts)
+   ├── 📷 Scan Textbook    (ML Kit OCR → text-only Gemma; multimodal isn't viable on the .litertlm E2B build)
    └── 🎓 Feynman          (role-reversal teaching)
 ```
 
