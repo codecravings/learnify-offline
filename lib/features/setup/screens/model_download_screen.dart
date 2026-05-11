@@ -1,8 +1,10 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/ai/gemma_service.dart';
+import '../../../core/ai/model_downloader.dart';
 import '../../../core/services/local_profile_service.dart';
 import '../../../core/theme/app_theme.dart';
 
@@ -31,12 +33,24 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen>
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
-    _checkSideloadedFile();
+    _bootstrap();
   }
 
-  Future<void> _checkSideloadedFile() async {
+  /// Decide what state to land in: an in-flight download to attach to,
+  /// a sideloaded file to import, or the idle CTA list.
+  Future<void> _bootstrap() async {
     final found = await GemmaService.instance.hasSideloadedFile();
     if (mounted) setState(() => _hasSideloadedFile = found);
+
+    final existing = await ModelDownloader.instance.findExisting(
+      url: GemmaService.modelUrl,
+      fileName: GemmaService.modelFileName,
+    );
+    if (existing == null) return;
+    if (!mounted) return;
+    // A previous run started this download; auto-resume + auto-install on
+    // completion. The user does not need to tap anything.
+    _startDownload();
   }
 
   Future<void> _importFromFile() async {
@@ -148,7 +162,7 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen>
     setState(() {
       _downloading = true;
       _error = false;
-      _status = 'Downloading Gemma 4 E2B...';
+      _status = 'Starting download…';
     });
 
     try {
@@ -157,21 +171,34 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen>
           if (!mounted) return;
           setState(() {
             _progress = p / 100;
-            _status = p < 100
-                ? 'Downloading model: ${p.round()}%'
-                : 'Loading into memory...';
+            // The new three-phase initialize() reports:
+            //   0..90  → background download
+            //   90..95 → file-copy + register
+            //   95..100 → engine warm
+            if (p < 90) {
+              final downloadPct = (p / 0.90).clamp(0, 100);
+              _status = 'Downloading Gemma 4 E2B: '
+                  '${downloadPct.toStringAsFixed(0)}% · keep app open or screen on';
+            } else if (p < 95) {
+              _status = 'Registering model…';
+            } else if (p < 100) {
+              _status = 'Warming up engine (10–30 s)…';
+            } else {
+              _status = 'Ready!';
+            }
           });
         },
       );
 
       if (!mounted) return;
       context.go(LocalProfileService.instance.hasProfile ? '/home' : '/setup/profile');
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('[ModelDownloadScreen] download flow threw: $e\n$st');
       if (!mounted) return;
       setState(() {
         _error = true;
         _downloading = false;
-        _status = 'Download failed. Check storage space and try again.';
+        _status = 'Download failed: $e';
       });
     }
   }
@@ -249,9 +276,11 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen>
                   ),
                 ),
                 const SizedBox(height: 8),
-                if (_progress > 0)
+                if (_progress > 0 && _progress < 0.91)
                   Text(
-                    '${(_progress * 2.58).toStringAsFixed(2)} GB / 2.58 GB',
+                    // _progress is 0..1 over the whole init flow; the download
+                    // band is 0..0.90, so renormalize for the GB readout.
+                    '${((_progress / 0.90) * 2.58).clamp(0, 2.58).toStringAsFixed(2)} GB / 2.58 GB',
                     style: TextStyle(color: Colors.white38, fontSize: 12),
                   ),
               ] else ...[
