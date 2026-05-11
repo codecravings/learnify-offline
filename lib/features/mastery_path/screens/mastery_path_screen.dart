@@ -149,10 +149,10 @@ class _MasteryPathScreenState extends State<MasteryPathScreen> {
     context.push('/lesson', extra: {
       'customTopic': '${widget.topic} — Step ${index + 1}: $title',
       'preselectedLevel': difficulty,
-      // Mastery-path lessons skip the style picker — the user already
-      // committed to a structured path, so jumping straight to Practical
-      // is less friction than a redundant 2-button modal.
-      'preselectedStyle': 'practical',
+      // We deliberately do NOT preselect a style — the user explicitly
+      // asked to pick Practical vs Movie/TV per step, since franchise
+      // mood often changes mid-path (you might want Naruto for the
+      // hooky intro step and a quieter cast for the synthesis step).
       'pathTopicKey': path['topicKey'],
       'pathStepIndex': index,
     });
