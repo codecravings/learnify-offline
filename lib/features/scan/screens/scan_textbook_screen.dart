@@ -106,8 +106,13 @@ class _ScanTextbookScreenState extends State<ScanTextbookScreen> {
   }
 
   void _createLesson() {
-    context.push('/lesson', extra: {
-      'customTopic': _topic,
+    // Push the user into the Mastery Path screen for this topic. That screen
+    // self-bootstraps the path on first visit (calls `decomposeMasteryPath`
+    // → `saveMasteryPath`) which gives the user 4/7/11 progressive sub-topics
+    // by level — far richer than dumping them into a single 6-scene lesson
+    // with concept chips they can't tap.
+    context.push('/mastery-path', extra: {
+      'topic': _topic,
       'level': _level,
     });
   }
@@ -367,9 +372,10 @@ class _ScanTextbookScreenState extends State<ScanTextbookScreen> {
             const SizedBox(height: 28),
           ],
           _PrimaryCta(
-            icon: Icons.auto_stories_rounded,
-            title: 'Create Story Lesson',
-            subtitle: 'Turn this page into an interactive lesson',
+            icon: Icons.route_rounded,
+            title: 'Build my Mastery Path',
+            subtitle:
+                'Decompose this page into bite-sized steps you can actually finish',
             color: AppTheme.accentCyanOf(context),
             onTap: _createLesson,
           ),
