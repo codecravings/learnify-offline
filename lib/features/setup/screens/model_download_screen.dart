@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -47,6 +48,68 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen>
     });
     try {
       await GemmaService.instance.initializeFromFile(
+        onProgress: (p) {
+          if (!mounted) return;
+          setState(() {
+            _progress = p / 100;
+            if (p < 70) {
+              _status = 'Copying model to app storage: ${p.round()}%';
+            } else if (p < 80) {
+              _status = 'Registering model...';
+            } else if (p < 100) {
+              _status = 'Warming up engine (10–30s)...';
+            } else {
+              _status = 'Ready!';
+            }
+          });
+        },
+      );
+      if (!mounted) return;
+      context.go(LocalProfileService.instance.hasProfile ? '/home' : '/setup/profile');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = true;
+        _downloading = false;
+        _status = 'Import failed: $e';
+      });
+    }
+  }
+
+  Future<void> _pickFromDevice() async {
+    final FilePickerResult? result;
+    try {
+      result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+        allowMultiple: false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = true;
+        _status = 'File picker failed: $e';
+      });
+      return;
+    }
+    final picked = result?.files.singleOrNull;
+    final path = picked?.path;
+    if (picked == null || path == null) return;
+    if (!picked.name.toLowerCase().endsWith('.litertlm')) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pick a .litertlm file (Gemma 4 E2B)')),
+      );
+      return;
+    }
+    setState(() {
+      _downloading = true;
+      _error = false;
+      _status = 'Importing ${picked.name}...';
+      _progress = 0;
+    });
+    try {
+      await GemmaService.instance.initializeFromFile(
+        filePath: path,
         onProgress: (p) {
           if (!mounted) return;
           setState(() {
@@ -253,9 +316,28 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen>
                   ),
                 ),
                 const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _pickFromDevice,
+                    icon: const Icon(Icons.folder_open_rounded),
+                    label: const Text(
+                      'Pick a .litertlm file from your device',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: BorderSide(color: Colors.white24),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 Center(
                   child: Text(
-                    'One-time download. Uses your local storage.',
+                    'One-time download. Or import a model file you already have.',
                     style: TextStyle(color: Colors.white38, fontSize: 12),
                   ),
                 ),
