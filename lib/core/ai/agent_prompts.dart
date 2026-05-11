@@ -52,7 +52,9 @@ abstract class AgentPrompts {
 You write a 6-message group chat that teaches $topic to a $level learner.
 Language: $language.
 $modeBlock
-Cast: $castSummary$moodLine$a11yLine
+
+Cast (THE ONLY two people in this conversation):
+$castSummary$moodLine$a11yLine
 
 Output EXACTLY 6 lines, ALTERNATING speakers. Each line is ONE chat message in this format:
 Name|emotion|dialogue
@@ -60,7 +62,17 @@ Name|emotion|dialogue
 Speaker order — start each line with EXACTLY this prefix:
 $orderBlock
 
-Rules:
+HARD RULES — these break the lesson if violated:
+- There are EXACTLY 2 participants: $n0 and $n1. NEVER mention or speak to a third person.
+- When a character addresses the other, use ONLY the name "$n0" or "$n1".
+  Do NOT use "Bob", "buddy", "friend", "guys", "everyone", "team", "you all",
+  or any other generic placeholder. Real names only.
+- Stay in each character's established voice (see "Speaks like" examples above).
+  Imitate that phrasing, vocabulary, and energy on every line.
+- Both characters speak in fluent $language unless their voice explicitly
+  differs (in which case follow what their voice samples actually do).
+
+Format rules:
 - "emotion" is one word: curious, hyped, chill, confused, surprised, amused, smug, sad.
 - "dialogue" ≤ 18 words. Texting tone. One optional emoji where natural.
 - Each line introduces ONE new sub-idea — never restate the previous one.
@@ -68,7 +80,7 @@ Rules:
 - NO JSON, NO bullet points, NO preamble. Just the 6 lines.
 - After the 6th line, output "[END]" on its own line.
 
-Example shape (different topic, generic names):
+Example shape (different topic, generic names — for FORMAT only, ignore the names):
 Riya|curious|bro why do bikes skid in the rain?
 Arjun|chill|less friction between tire and road
 Riya|surprised|wait so friction is actually GOOD??
@@ -76,9 +88,81 @@ Arjun|amused|without it u couldn't even walk 😭
 ''';
   }
 
-  /// Compact one-line cast summary for the prompt — far leaner than the old
-  /// multi-line persona block. When a franchise is set, pulls voice + traits
-  /// from the dataset; otherwise uses the generic role.
+  /// Continuation system prompt. Used after the first 6-line wave to push
+  /// the chat toward 12 / 18 messages without re-running the heavy persona
+  /// + topic + franchise prompt. The first-wave prompt has already
+  /// established the vibe; here we just nudge for depth + new examples.
+  ///
+  /// Caller is responsible for splicing the last 2 lines into the user
+  /// prompt — that's how the parser locks ABAB across waves.
+  static String storyContinuation({
+    required String topic,
+    required String level,
+    required String mode,
+    required List<String> castNames,
+    required String castSummary,
+    required Franchise? franchise,
+    required String language,
+    required int sceneIndex,
+    String mood = '',
+    bool dyslexic = false,
+  }) {
+    final styleHint = (mode == 'movieTv' && franchise != null)
+        ? 'Style: ${franchise.name}. Cast keeps the SAME voice as before — '
+            'imitate their sample phrasing on every line.'
+        : 'Style: same friend-group chat vibe as before.';
+    final names = castNames.isEmpty ? ['A', 'B'] : castNames;
+    final n0 = names[0];
+    final n1 = names.length > 1 ? names[1] : names[0];
+    // Continuation alternates from where wave-1 left off. Wave-1 was 6 lines
+    // ABABAB ending with $n1, so wave-2 line 1 is $n0 again.
+    final order = [n0, n1, n0, n1, n0, n1];
+    final orderBlock = [
+      for (var i = 0; i < 6; i++) 'Line ${i + 1}: ${order[i]}|',
+    ].join('\n');
+    final moodLine = _moodOneLiner(mood);
+    final a11yLine = dyslexic ? '\nA11Y: max 12-word lines, common words only.' : '';
+
+    return '''
+Continue the same group chat about $topic ($level learner).
+Language: $language. $styleHint
+
+Cast (THE ONLY two people — same as the opening of this chat):
+$castSummary$moodLine$a11yLine
+
+Output 6 NEW lines, picking up exactly where the conversation paused. Each
+line is ONE chat message, format: Name|emotion|dialogue.
+
+Speaker order (continues the ABAB rhythm):
+$orderBlock
+
+HARD RULES (same as the opening — small models drift here, do NOT):
+- EXACTLY 2 people: $n0 and $n1. Never address or invent a third.
+- When a character calls the other, use the literal name "$n0" or "$n1".
+  Do NOT say "Bob", "buddy", "friend", "guys", "everyone", "team".
+- Stay in each character's voice (see "Speaks like" examples). Imitate the
+  phrasing pattern, slang, and energy from those samples on every line.
+
+Format rules:
+- Do NOT recap or summarise — push the topic forward with a NEW angle each line.
+- Introduce a fresh sub-idea, edge case, real-world example, or "wait what?"
+  per line. Never restate what was already said.
+- "emotion" is one word. "dialogue" ≤ 18 words, texting tone, optional emoji.
+- Conversation arc this wave: ${order[0]} digs deeper → ${order[1]} adds nuance →
+  ${order[0]} brings a concrete case → ${order[1]} flips it → ${order[0]} probes the
+  edge → ${order[1]} lands the bigger picture.
+- NO JSON, NO bullets, NO preamble. Just the 6 lines.
+- After the 6th line, output "[END]" on its own line.
+''';
+  }
+
+  /// Persona block for the prompt. The small E2B model does not maintain
+  /// voice from a one-line description — it needs concrete *examples* to
+  /// imitate. We embed the full speech_style + 2 sample_dialogues per cast
+  /// member so the model has actual phrasing to mimic, not abstract rules.
+  ///
+  /// One short paragraph per character, separated by a blank line. Keeps
+  /// prefill under the LiteRT-LM segfault threshold (cast is capped at 2).
   static String castSummary(Franchise? franchise, List<String> names) {
     if (franchise == null) {
       // Generic ensemble — names already carry the role.
@@ -92,11 +176,19 @@ Arjun|amused|without it u couldn't even walk 😭
         parts.add(name);
         continue;
       }
-      final traits = p.traits.take(2).join(', ');
-      final voice = p.speechStyle.split('.').first.trim();
-      parts.add('$name (${p.role}; $voice; $traits)');
+      final traits = p.traits.take(3).join(', ');
+      final samples = p.sampleDialogues
+          .take(2)
+          .map((d) => '"${d.trim()}"')
+          .join(' · ');
+      parts.add(
+        '$name — ${p.role}.\n'
+        '  Voice: ${p.speechStyle.trim()}\n'
+        '  Traits: $traits\n'
+        '  Speaks like: $samples',
+      );
     }
-    return parts.join(' · ');
+    return parts.join('\n\n');
   }
 
   /// Tiny end-of-stream quiz prompt. Runs after the chat has rendered, so
@@ -106,14 +198,21 @@ Arjun|amused|without it u couldn't even walk 😭
     required String topic,
     required String level,
     required String language,
-  }) =>
-      '''
-Generate exactly 3 multiple-choice questions on "$topic" at $level level.
-Language: $language.
+    List<String> weakAreas = const [],
+  }) {
+    final weakBlock = weakAreas.isEmpty
+        ? ''
+        : '\nFocus 2 of the questions on these recent weak concepts: '
+            '${weakAreas.take(5).join(", ")}.';
+    return '''
+Generate exactly 5 multiple-choice questions on "$topic" at $level level.
+Language: $language.$weakBlock
 Return ONLY this JSON, first char "{", last char "}":
-{"quiz":[{"question":"...","options":["A","B","C","D"],"correctIndex":0,"explanation":"..."}]}
+{"quiz":[{"question":"...","options":["A","B","C","D"],"correctIndex":0,"explanation":"...","concept":"short phrase"}]}
 Each "question" ≤ 14 words. Each option ≤ 10 words. correctIndex is 0–3.
+"concept" is a 1–4 word tag for what the question tests (e.g. "Newton's third law").
 ''';
+  }
 
   static String _moodOneLiner(String mood) {
     if (mood.isEmpty) return '';
@@ -364,40 +463,23 @@ Keep response under 150 words unless a detailed plan is requested.
     required int targetStepCount,
   }) =>
       '''
-You are the Mastery Agent in Learnify's multi-agent AI system.
-Decompose any topic into a structured mastery path of EXACTLY $targetStepCount progressive steps.
-Each step builds on the previous; together they take a learner from zero to confident.
-Language: $language. Respond ONLY in $language for "title" and "description" fields.
+Output ONLY a JSON object that decomposes "$topic" into EXACTLY $targetStepCount progressive learning steps. NO markdown, NO bullets, NO commentary — just JSON. Start with "{" and end with "}".
 
-## Input
-Topic: $topic
-Student level: $level
-Past concepts already learned by this student: $pastConcepts
+Language: $language. Write "title" and "description" in $language.
+Student level: $level.
+Already mastered: $pastConcepts.
 
-## Output — return ONLY valid JSON, no markdown fences:
-{
-  "topic": "$topic",
-  "steps": [
-    {
-      "index": 0,
-      "title": "...",
-      "description": "...",
-      "concepts": ["...", "..."],
-      "difficulty": "basics|intermediate|advanced"
-    }
-  ],
-  "estimated_minutes": ${targetStepCount * 8},
-  "prerequisite_concepts": ["..."]
-}
+Schema (copy this shape exactly):
+{"topic":"$topic","steps":[{"index":0,"title":"4–6 word title","description":"one sentence","concepts":["tag1","tag2"],"difficulty":"basics"}],"estimated_minutes":${targetStepCount * 8},"prerequisite_concepts":["..."]}
 
-## Rules
-- EXACTLY $targetStepCount steps total, ordered easiest → hardest.
-- First step is always definitional ("What is X").
-- Last step is always practical/synthesis ("Where this matters in real life").
-- Each step should be teachable in one short story (3 scenes, ~3 minutes).
-- "title" is 4–6 words. "description" is one sentence.
-- "concepts" is 2–4 short tags (lowercase nouns, reusable across topics).
-- Skip basics the student already knows (from past concepts) — start higher.
+Rules:
+- EXACTLY $targetStepCount step objects, ordered easiest → hardest.
+- First step's title is definitional ("What is X").
+- Last step's title is synthesis ("Where this matters in real life" / "Putting it together").
+- "title" 4–6 words. "description" one short sentence.
+- "concepts" is 2–4 short lowercase tags.
+- "difficulty" is one of: "basics", "intermediate", "advanced".
+- Skip basics the student already mastered.
 ''';
 
   // ── ORCHESTRATOR ─────────────────────────────────────────────────────────────
@@ -414,24 +496,35 @@ Return ONLY valid JSON — no markdown, no explanation:
 }
 ''';
 
-  // ── IMAGE ANALYSIS ───────────────────────────────────────────────────────────
+  // ── TEXTBOOK PAGE ANALYSIS (from on-device OCR text) ─────────────────────────
 
-  static String imageAnalysis({required String language}) => '''
-You are analyzing an image from a student's textbook or study material.
+  static String textbookAnalysis({
+    required String language,
+    required String pageText,
+  }) => '''
+You are analyzing the text contents of a student's textbook page.
 Language: $language. Respond in $language.
 
+The text below was extracted from a photo of the page using on-device OCR, so
+it may contain typos, broken words, or stray characters. Use your best judgement
+to infer the topic from the gist; ignore obvious OCR noise.
+
 Extract:
-1. The main topic/subject shown
-2. Key concepts visible (list them)
+1. The main topic/subject the page is teaching
+2. Key concepts mentioned (list them — 3 to 6 items)
 3. Difficulty level (basics/intermediate/advanced)
 
-Return ONLY valid JSON:
+Return ONLY valid JSON, no markdown fences:
 {
   "topic": "string",
   "concepts": ["string"],
   "level": "basics|intermediate|advanced",
-  "description": "one sentence describing what's in the image"
+  "description": "one sentence describing what the page is about"
 }
+
+--- BEGIN PAGE TEXT ---
+$pageText
+--- END PAGE TEXT ---
 ''';
 
   // ── HELPERS ──────────────────────────────────────────────────────────────────
