@@ -290,13 +290,27 @@ class AppDatabase {
     return d.insert('memory_events', {'profile_id': profileId, ...data});
   }
 
-  Future<List<Map<String, dynamic>>> getMemoryEvents(int profileId,
-      {String? topic, int limit = 100}) async {
+  Future<List<Map<String, dynamic>>> getMemoryEvents(
+    int profileId, {
+    String? topic,
+    String? type,
+    int limit = 100,
+  }) async {
     final d = await db;
+    final clauses = <String>['profile_id = ?'];
+    final args = <Object>[profileId];
+    if (topic != null) {
+      clauses.add('topic = ?');
+      args.add(topic);
+    }
+    if (type != null) {
+      clauses.add('type = ?');
+      args.add(type);
+    }
     return d.query(
       'memory_events',
-      where: topic != null ? 'profile_id = ? AND topic = ?' : 'profile_id = ?',
-      whereArgs: topic != null ? [profileId, topic] : [profileId],
+      where: clauses.join(' AND '),
+      whereArgs: args,
       orderBy: 'timestamp DESC',
       limit: limit,
     );
