@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/ai/gemma_orchestrator.dart';
+import '../../../core/services/text_recognition_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/glass_container.dart';
 
@@ -26,6 +27,7 @@ class _ScanTextbookScreenState extends State<ScanTextbookScreen> {
 
   _ScanPhase _phase = _ScanPhase.start;
   Uint8List? _imageBytes;
+  String? _imagePath;
   String? _errorMsg;
 
   // Result data
@@ -44,6 +46,7 @@ class _ScanTextbookScreenState extends State<ScanTextbookScreen> {
       final bytes = await File(file.path).readAsBytes();
       setState(() {
         _imageBytes = bytes;
+        _imagePath = file.path;
         _phase = _ScanPhase.preview;
       });
     } catch (e) {
@@ -55,11 +58,23 @@ class _ScanTextbookScreenState extends State<ScanTextbookScreen> {
   }
 
   Future<void> _analyze() async {
-    if (_imageBytes == null) return;
+    final path = _imagePath;
+    if (path == null) return;
     setState(() => _phase = _ScanPhase.analyzing);
 
     try {
-      final result = await _orchestrator.analyzeTextbookImage(_imageBytes!);
+      final pageText = await TextRecognitionService.instance.extractFromFile(path);
+      if (pageText.length < 12) {
+        if (!mounted) return;
+        setState(() {
+          _errorMsg = 'Couldn\'t detect text on this page. '
+              'Try better lighting, hold the camera closer, or pick a sharper photo.';
+          _phase = _ScanPhase.error;
+        });
+        return;
+      }
+
+      final result = await _orchestrator.analyzeTextbookText(pageText);
       if (!mounted) return;
       setState(() {
         _topic = (result['topic'] as String?)?.trim().isNotEmpty == true
@@ -72,7 +87,7 @@ class _ScanTextbookScreenState extends State<ScanTextbookScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _errorMsg = 'Gemma could not read this page. Try a clearer photo.\n\n$e';
+        _errorMsg = 'Could not analyze this page. Try a clearer photo.\n\n$e';
         _phase = _ScanPhase.error;
       });
     }
@@ -81,6 +96,7 @@ class _ScanTextbookScreenState extends State<ScanTextbookScreen> {
   void _reset() {
     setState(() {
       _imageBytes = null;
+      _imagePath = null;
       _topic = '';
       _level = 'basics';
       _concepts = const [];
