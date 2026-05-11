@@ -38,6 +38,9 @@ dependencies:
   # Image input (multimodal — scan textbook)
   image_picker: ^1.1.2
 
+  # File input (sideload .litertlm from anywhere on device — fallback when scoped-storage detection misses)
+  file_picker: ^8.1.4
+
   # Accessibility — opt-in read-aloud / karaoke highlight (lazy-init, off by default)
   flutter_tts: ^4.2.5
 
