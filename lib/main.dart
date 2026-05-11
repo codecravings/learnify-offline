@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_downloader/flutter_downloader.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/ai/gemma_service.dart';
@@ -10,6 +12,10 @@ import 'routes/app_router.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize the resumable background downloader BEFORE any setup screen
+  // tries to enqueue a model download.
+  await FlutterDownloader.initialize(debug: kDebugMode);
 
   // Initialize flutter_gemma runtime, then warm an already-installed
   // model if one exists (so cold relaunches skip /setup). If a sideloaded
