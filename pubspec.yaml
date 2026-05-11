@@ -45,6 +45,10 @@ dependencies:
   # silently drops image inputs, so we OCR locally and feed extracted text to Gemma.
   google_mlkit_text_recognition: ^0.15.0
 
+  # Resilient background model download — survives screen lock / app backgrounding,
+  # resumes on network drop. Replaces flutter_gemma's flaky in-process .fromNetwork().
+  flutter_downloader: ^1.12.0
+
   # Accessibility — opt-in read-aloud / karaoke highlight (lazy-init, off by default)
   flutter_tts: ^4.2.5
 
