@@ -268,19 +268,69 @@ class LocalMemoryService {
     }).toList();
   }
 
-  /// Past missed questions + low-accuracy concepts for a topic — fed into
-  /// the Quiz / Story prompt so generated questions target real weak spots.
+  /// Past missed *concepts* for a topic — fed into the next quiz prompt so
+  /// generated questions target real weak spots. Reads the per-concept
+  /// `concept_missed` events we write in `retainQuizResult`. Falls back to
+  /// the legacy `missed_questions` text on rows that pre-date concept tagging
+  /// so existing learner history doesn't go silent the day this lands.
   Future<List<String>> getWeakAreas(String topic, {int limit = 5}) async {
     final pid = _pid;
     if (pid == null) return [];
-    final results = await _db.getQuizResults(pid, topic: topic, limit: 10);
     final seen = <String>{};
     final out = <String>[];
+
+    // Preferred path: concept_missed events written per-concept.
+    final events = await _db.getMemoryEvents(
+      pid,
+      type: 'concept_missed',
+      topic: topic,
+      limit: 50,
+    );
+    for (final e in events) {
+      final tags = AppDatabase.decodeList(e['tags'] as String?);
+      for (final t in tags) {
+        if (!t.startsWith('concept:')) continue;
+        final concept = t.substring('concept:'.length).trim();
+        if (concept.isEmpty) continue;
+        if (seen.add(concept)) out.add(concept);
+        if (out.length >= limit) return out;
+      }
+    }
+
+    // Legacy fallback: question text from quiz_results.missed_questions.
+    final results = await _db.getQuizResults(pid, topic: topic, limit: 10);
     for (final r in results) {
       final missed = AppDatabase.decodeList(r['missed_questions'] as String?);
       for (final m in missed) {
         if (m.trim().isEmpty) continue;
         if (seen.add(m)) out.add(m);
+        if (out.length >= limit) return out;
+      }
+    }
+    return out;
+  }
+
+  /// Cross-topic recent weak concepts for the Companion's Study Pulse.
+  /// Returns the most-recently-missed unique concepts, regardless of topic,
+  /// so the daily summary can name 1–2 specific things to revisit instead
+  /// of vague "you've been studying physics" platitudes.
+  Future<List<String>> getRecentWeakConcepts({int limit = 5}) async {
+    final pid = _pid;
+    if (pid == null) return const [];
+    final events = await _db.getMemoryEvents(
+      pid,
+      type: 'concept_missed',
+      limit: 50,
+    );
+    final seen = <String>{};
+    final out = <String>[];
+    for (final e in events) {
+      final tags = AppDatabase.decodeList(e['tags'] as String?);
+      for (final t in tags) {
+        if (!t.startsWith('concept:')) continue;
+        final concept = t.substring('concept:'.length).trim();
+        if (concept.isEmpty) continue;
+        if (seen.add(concept)) out.add(concept);
         if (out.length >= limit) return out;
       }
     }
