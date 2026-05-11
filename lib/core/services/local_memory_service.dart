@@ -25,6 +25,7 @@ class LocalMemoryService {
     required int total,
     List<String> missedQuestions = const [],
     List<String> concepts = const [],
+    List<String> missedConcepts = const [],
     String? pathTopicKey,
     int? pathStepIndex,
   }) async {
@@ -46,6 +47,28 @@ class LocalMemoryService {
       'concepts': AppDatabase.encodeList(concepts),
       'timestamp': now,
     });
+
+    // Per-concept miss events feed `getRecentWeakConcepts()` for the Companion
+    // and `getWeakAreas()` for the next quiz on this topic. We write one event
+    // per missed concept (deduped) so a query can `tag LIKE '%:concept_missed'`
+    // across topics without re-parsing the JSON in the quiz_results row.
+    final dedupedMissed = {
+      for (final c in missedConcepts)
+        if (c.trim().isNotEmpty) c.trim(),
+    };
+    for (final concept in dedupedMissed) {
+      await _db.insertMemoryEvent(pid, {
+        'type': 'concept_missed',
+        'content': 'Missed a quiz question on "$concept" while studying $topic.',
+        'topic': topic,
+        'tags': AppDatabase.encodeList([
+          'topic:$topicKey',
+          'concept:$concept',
+          'level:$level',
+        ]),
+        'timestamp': now,
+      });
+    }
 
     // Store memory event (Hindsight-style rich content)
     final content = [
