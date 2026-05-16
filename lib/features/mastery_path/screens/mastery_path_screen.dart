@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/ai/gemma_orchestrator.dart';
 import '../../../core/services/local_memory_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/ambient_background.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../../core/widgets/neon_button.dart';
 import '../../../core/widgets/particle_background.dart';
@@ -163,8 +164,8 @@ class _MasteryPathScreenState extends State<MasteryPathScreen> {
     final dark = AppTheme.isDark(context);
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: Container(
-        decoration: AppTheme.scaffoldDecorationOf(context),
+      body: AmbientBackground(
+        intensity: 0.7,
         child: Stack(
           children: [
             if (dark)
