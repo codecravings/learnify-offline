@@ -12,6 +12,7 @@ import '../../../core/services/local_memory_service.dart';
 import '../../../core/services/local_profile_service.dart';
 import '../../../core/services/text_to_speech_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/ambient_background.dart';
 import '../../../core/widgets/bionic_text.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../../core/widgets/karaoke_text.dart';
@@ -611,30 +612,29 @@ class _StoryScreenState extends State<StoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundPrimary,
-      body: Stack(
-        children: [
-          Container(
-            decoration: const BoxDecoration(
-              gradient: AppTheme.backgroundGradient,
+      backgroundColor: Colors.transparent,
+      extendBodyBehindAppBar: true,
+      body: AmbientBackground(
+        intensity: 0.8,
+        child: Stack(
+          children: [
+            if (_phase != _Phase.story && _phase != _Phase.loading)
+              const ParticleBackground(
+                particleCount: 30,
+                particleColor: AppTheme.accentPurple,
+                maxRadius: 1.2,
+              ),
+            SafeArea(child: _buildPhase()),
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 8,
+              left: 8,
+              child: IconButton(
+                onPressed: () => context.pop(),
+                icon: const Icon(Icons.close_rounded, color: Colors.white),
+              ),
             ),
-          ),
-          if (_phase != _Phase.story && _phase != _Phase.loading)
-            const ParticleBackground(
-              particleCount: 30,
-              particleColor: AppTheme.accentPurple,
-              maxRadius: 1.2,
-            ),
-          SafeArea(child: _buildPhase()),
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 8,
-            left: 8,
-            child: IconButton(
-              onPressed: () => context.pop(),
-              icon: const Icon(Icons.close_rounded, color: Colors.white),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
