@@ -8,6 +8,7 @@ import '../../../core/franchises/franchise_loader.dart';
 import '../../../core/services/local_memory_service.dart';
 import '../../../core/services/local_profile_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/ambient_background.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../../core/widgets/neon_button.dart';
 
@@ -189,14 +190,11 @@ class _FeynmanScreenState extends State<FeynmanScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundPrimary,
-      body: Stack(
-        children: [
-          Container(
-            decoration: const BoxDecoration(
-              gradient: AppTheme.backgroundGradient,
-            ),
-          ),
+      backgroundColor: Colors.transparent,
+      body: AmbientBackground(
+        intensity: 0.8,
+        child: Stack(
+          children: [
           SafeArea(
             child: switch (_phase) {
               _Phase.intro => _buildIntro(),
@@ -213,6 +211,7 @@ class _FeynmanScreenState extends State<FeynmanScreen> {
             ),
           ),
         ],
+        ),
       ),
     );
   }
