@@ -90,6 +90,7 @@ class GemmaOrchestrator {
     Franchise? franchise,
     String franchiseName = '',
     String level = 'basics',
+    int targetScenes = 16,
   }) async* {
     Franchise? f = franchise;
     if (f == null && franchiseName.isNotEmpty) {
@@ -103,7 +104,7 @@ class GemmaOrchestrator {
 
     await _memory.retainTopicInterest(topic, level: level);
 
-    final systemPrompt = AgentPrompts.story(
+    final wave1Prompt = AgentPrompts.story(
       topic: topic,
       level: level,
       mode: mode,
@@ -120,15 +121,96 @@ class GemmaOrchestrator {
     final title = _quickTitle(topic, f);
     yield StoryChunk.intro(title: title, characters: cast, scenes: const []);
 
-    // ── Stream the 6 scene lines ─────────────────────────────────────────
+    // ── Wave 1: the first 6 scenes via the heavy persona prompt ──────────
     final scenes = <StoryScene>[];
+    yield* _runStoryWave(
+      systemPrompt: wave1Prompt,
+      userPrompt:
+          'Generate the 6-line group chat about "$topic" now. Format: Name|emotion|dialogue per line.',
+      cast: cast,
+      scenes: scenes,
+      requireAtLeastOne: true,
+    );
+
+    // ── Continuation waves (cap 2 ⇒ max 18 scenes) ───────────────────────
+    // The 2-cast + 6-line/wave + 2-wave-cap envelope keeps us under the
+    // LiteRT-LM segfault prefill threshold. Each wave's prompt is short
+    // (~250 tokens) because the heavy persona block was wave-1 only.
+    const maxContinuations = 2;
+    var wave = 1;
+    while (scenes.length < targetScenes && wave <= maxContinuations) {
+      final lastTwo = scenes.length >= 2
+          ? scenes.sublist(scenes.length - 2)
+          : List<StoryScene>.from(scenes);
+      final castById = {for (final c in cast) c.id: c.name};
+      final priorBlock = lastTwo.map((s) {
+        final name = castById[s.characterId] ?? s.characterId;
+        return '$name|${s.emotion}|${s.dialogue}';
+      }).join('\n');
+
+      final continuationSystem = AgentPrompts.storyContinuation(
+        topic: topic,
+        level: level,
+        mode: mode,
+        castNames: castNames,
+        castSummary: castSummary,
+        franchise: f,
+        language: _lang,
+        sceneIndex: scenes.length,
+        mood: _mood,
+        dyslexic: _dyslexic,
+      );
+      final continuationUser =
+          'The chat so far ended with these messages:\n$priorBlock\n\n'
+          'Now write the next 6 lines. Same characters, same vibe, new ideas.';
+
+      final before = scenes.length;
+      yield* _runStoryWave(
+        systemPrompt: continuationSystem,
+        userPrompt: continuationUser,
+        cast: cast,
+        scenes: scenes,
+        requireAtLeastOne: false,
+      );
+      // Bail if a wave produced nothing — model is stuck. Better to land on
+      // what we have than fire a third call into the void.
+      if (scenes.length == before) {
+        debugPrint('[Story] continuation wave ${wave + 1} produced 0 scenes; '
+            'stopping at ${scenes.length} total scenes.');
+        break;
+      }
+      wave++;
+    }
+
+    // ── Quiz: separate small JSON call (fast, ~50 tokens) ────────────────
+    final quiz = await _generateStoryQuiz(topic: topic, level: level);
+    yield StoryChunk.tail(scenes: const [], quiz: quiz);
+  }
+
+  /// Runs one streaming Gemma call, parses up to 6 `Name|emotion|dialogue`
+  /// lines, and yields a `StoryChunk.tail` per scene as they parse so the
+  /// UI can render them progressively. Mutates [scenes] in place so the
+  /// caller can chain waves with the running scene index intact (which is
+  /// what locks ABAB across wave boundaries).
+  ///
+  /// Throws when [requireAtLeastOne] is true and the entire wave produced
+  /// zero parseable lines — that's the signal for the screen to fall back
+  /// to the error path instead of hanging on an empty chat.
+  Stream<StoryChunk> _runStoryWave({
+    required String systemPrompt,
+    required String userPrompt,
+    required List<FranchiseCharacter> cast,
+    required List<StoryScene> scenes,
+    required bool requireAtLeastOne,
+  }) async* {
+    final waveStart = scenes.length;
+    final waveTarget = waveStart + 6;
     final buffer = StringBuffer();
     final fullRaw = StringBuffer();
 
     final stream = _gemma.generateStream(
       systemPrompt: systemPrompt,
-      userPrompt:
-          'Generate the 6-line group chat about "$topic" now. Format: Name|emotion|dialogue per line.',
+      userPrompt: userPrompt,
     );
 
     await for (final token in stream) {
@@ -150,17 +232,19 @@ class GemmaOrchestrator {
         if (scene != null) {
           scenes.add(scene);
           yield StoryChunk.tail(scenes: [scene], quiz: const []);
-          if (scenes.length >= 6) break;
+          if (scenes.length >= waveTarget) break;
         } else {
           debugPrint('[Story] dropped line: $line');
         }
       }
-      if (scenes.length >= 6) break;
+      if (scenes.length >= waveTarget) break;
     }
 
     // Flush any unterminated final line.
     final tail = buffer.toString().trim();
-    if (scenes.length < 6 && tail.isNotEmpty && !tail.toUpperCase().contains('[END]')) {
+    if (scenes.length < waveTarget &&
+        tail.isNotEmpty &&
+        !tail.toUpperCase().contains('[END]')) {
       final scene = _parsePipeLine(tail, cast, sceneIndex: scenes.length);
       if (scene != null) {
         scenes.add(scene);
@@ -168,11 +252,9 @@ class GemmaOrchestrator {
       }
     }
 
-    if (scenes.isEmpty) {
-      // Model produced output but nothing matched the chat format. Dump it
-      // so we can see whether (a) zero tokens, (b) preamble that never
-      // crossed a newline, or (c) wrong-format lines. The screen catches
-      // the throw and resets to style-select instead of hanging.
+    if (requireAtLeastOne && scenes.length == waveStart) {
+      // Wave-1 produced nothing — same fail-fast path we had before, just
+      // hoisted into the helper.
       final dump = fullRaw.toString();
       final head = dump.substring(0, dump.length.clamp(0, 800));
       debugPrint('[Story] 0 scenes parsed. tokens=${dump.length} '
@@ -180,10 +262,6 @@ class GemmaOrchestrator {
       throw StateError(
           'No chat lines parsed from Gemma (got ${dump.length} chars).');
     }
-
-    // ── Quiz: separate small JSON call (fast, ~50 tokens) ────────────────
-    final quiz = await _generateStoryQuiz(topic: topic, level: level);
-    yield StoryChunk.tail(scenes: const [], quiz: quiz);
   }
 
   /// One scene parsed from a `Name|emotion|dialogue` line. Returns null on
@@ -400,10 +478,17 @@ You are about to receive a turn instruction telling you what to do next. Follow 
             colorHex: '#22C55E'),
       ];
     }
+    // Filter to characters that can actually carry a teaching conversation.
+    // Pokémon's Pikachu, Pokémon's Charizard, etc. are non-verbal mascots
+    // whose `sample_dialogues` are wrapped like `Pika! (translation: ...)`
+    // — fine flavour for the franchise, but disastrous when forced to teach
+    // Pythagoras: the small E2B model just defaults to generic English. We
+    // skip them and pick the next verbal characters in dataset order.
+    final verbal = franchise.characters.where(_isVerbalCharacter).toList();
+    final picks = (verbal.length >= 2 ? verbal : franchise.characters).take(2).toList();
     final out = <FranchiseCharacter>[];
-    final chars = franchise.characters.take(2).toList();
-    for (var i = 0; i < chars.length; i++) {
-      final c = chars[i];
+    for (var i = 0; i < picks.length; i++) {
+      final c = picks[i];
       out.add(FranchiseCharacter(
         id: _slugify(c.name, fallback: 'char$i'),
         name: c.name,
@@ -412,6 +497,32 @@ You are about to receive a turn instruction telling you what to do next. Follow 
       ));
     }
     return out;
+  }
+
+  /// True if a franchise character can plausibly hold a teaching dialogue
+  /// in English — i.e. they aren't a mascot whose entire voice is a single
+  /// non-word repeated in different intonations.
+  ///
+  /// Heuristic: count `sample_dialogues` that look like *non-verbal*
+  /// patterns — short utterances dominated by `(translation: ...)` parens
+  /// or speech_style explicitly flagging non-verbal speech.
+  bool _isVerbalCharacter(FranchisePersona p) {
+    final s = p.speechStyle.toLowerCase();
+    final nonVerbalHints = const [
+      'only says',
+      'non-verbal',
+      'emotion through tone',
+      'pure demonstration',
+      'shows first, explains never',
+      'wordless',
+    ];
+    if (nonVerbalHints.any(s.contains)) return false;
+    if (p.sampleDialogues.isEmpty) return true;
+    var parened = 0;
+    for (final d in p.sampleDialogues) {
+      if (d.contains('(') && d.contains(':') && d.length < 70) parened++;
+    }
+    return parened * 2 < p.sampleDialogues.length;
   }
 
   String _slugify(String s, {required String fallback}) {
