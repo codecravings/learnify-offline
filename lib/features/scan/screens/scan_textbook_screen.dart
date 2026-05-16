@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/ai/gemma_orchestrator.dart';
 import '../../../core/services/text_recognition_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/ambient_background.dart';
 import '../../../core/widgets/glass_container.dart';
 
 enum _ScanPhase { start, preview, analyzing, result, error }
@@ -134,8 +135,8 @@ class _ScanTextbookScreenState extends State<ScanTextbookScreen> {
           onPressed: () => context.pop(),
         ),
       ),
-      body: Container(
-        decoration: AppTheme.scaffoldDecorationOf(context),
+      body: AmbientBackground(
+        intensity: 0.7,
         child: SafeArea(
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 300),
