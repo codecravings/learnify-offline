@@ -298,15 +298,20 @@ class GemmaOrchestrator {
     required String topic,
     required String level,
   }) async {
-    Future<List<StoryQuizQuestion>?> attempt() async {
+    // Pull recent weak concepts for this topic so the quiz actually targets
+    // the gaps. Cheap on-device read, no extra Gemma round-trip.
+    final weakAreas = await _memory.getWeakAreas(topic);
+
+    Future<List<StoryQuizQuestion>?> attempt(String userPrompt) async {
       try {
         final raw = await _gemma.generate(
           systemPrompt: AgentPrompts.storyQuiz(
             topic: topic,
             level: level,
             language: _lang,
+            weakAreas: weakAreas,
           ),
-          userPrompt: 'Output the JSON now.',
+          userPrompt: userPrompt,
         );
         final parsed = _parseJson(raw);
         final qs = _parseQuiz(parsed['quiz']);
@@ -317,13 +322,30 @@ class GemmaOrchestrator {
       }
     }
 
-    // Quiz JSON is short but the small model occasionally drops a brace and
-    // _parseJson returns an empty map. Retry once before giving up.
-    final first = await attempt();
+    // Two attempts. Same shape failures as decomposeMasteryPath:
+    //   1. Brace dropped → _parseJson throws.
+    //   2. Wrong-shape valid JSON ({"summary": "..."}) — the long story
+    //      stream just before this leaks "summary" via flutter_gemma's
+    //      shared KV cache, so the retry must explicitly forbid that key.
+    final first = await attempt('Output the JSON now. First char "{".');
     if (first != null) return first;
-    final second = await attempt();
+    final second = await attempt(
+      'JSON ONLY. Top-level object has exactly one key: "quiz" '
+      '(array of 5 question objects). DO NOT use "summary", "response", '
+      'or any other top-level key.',
+    );
     return second ?? const [];
   }
+
+  /// Public retry hook for the screen: when wave-2 of the story trips a
+  /// quiz failure, we want a "Retry quiz" button to call into here without
+  /// re-running the whole story stream. Mirrors `_generateStoryQuiz` but
+  /// callable from outside the stream lifecycle.
+  Future<List<StoryQuizQuestion>> regenerateStoryQuiz({
+    required String topic,
+    required String level,
+  }) =>
+      _generateStoryQuiz(topic: topic, level: level);
 
   String _quickTitle(String topic, Franchise? f) {
     final cap = topic.isEmpty
@@ -915,13 +937,20 @@ Return ONLY valid JSON:
     if (history.isEmpty) {
       return "You're just getting started! Begin your first lesson to unlock personalized insights.";
     }
+    final weakConcepts = await _memory.getRecentWeakConcepts(limit: 5);
+    final weakBlock = weakConcepts.isEmpty
+        ? ''
+        : '\n\nRecent weak concepts (where they got quiz questions wrong): '
+            '${weakConcepts.join(", ")}. Mention 1–2 of these by name in the '
+            'pulse summary so the student knows what to revisit next.';
     return _gemma.generate(
       systemPrompt: '''
 You are the Learner Twin Agent. Summarize this student's learning progress in 3–4 sentences.
 Be specific — mention actual topics, scores, and trends. Be encouraging but honest.
 Language: $_lang. Respond in $_lang.
 ''',
-      userPrompt: 'Student learning history:\n$history\n\nWrite a study pulse summary.',
+      userPrompt:
+          'Student learning history:\n$history$weakBlock\n\nWrite a study pulse summary.',
     );
   }
 
