@@ -72,5 +72,14 @@
 	<string>Learnify reads textbook photos from your library so Gemma 4 on your device can generate personalized lessons.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Learnify may save generated study notes to your photos.</string>
+	<!-- Lets users drag the gemma-4-E2B-it.litertlm model into the app's
+	     Documents folder via Finder / Files app, so iOS sideload works the
+	     same way Android sideload does via adb push. -->
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<key>UISupportsDocumentBrowser</key>
+	<true/>
 </dict>
 </plist>
