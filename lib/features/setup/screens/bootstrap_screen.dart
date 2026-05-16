@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/ai/gemma_service.dart';
 import '../../../core/services/local_profile_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/ambient_background.dart';
 
 /// Shown on cold launch when a sideloaded / previously-downloaded model file
 /// exists but flutter_gemma's per-process active session hasn't been warmed
@@ -81,11 +82,12 @@ class _BootstrapScreenState extends State<BootstrapScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundPrimary,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(
+      backgroundColor: Colors.transparent,
+      body: AmbientBackground(
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(28),
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Spacer(),
@@ -186,6 +188,7 @@ class _BootstrapScreenState extends State<BootstrapScreen>
                 ),
               ),
             ],
+            ),
           ),
         ),
       ),
