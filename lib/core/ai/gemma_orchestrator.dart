@@ -355,36 +355,26 @@ You are about to receive a turn instruction telling you what to do next. Follow 
 ''';
   }
 
-  // ── STORY FROM IMAGE (multimodal) ─────────────────────────────────────────
+  // ── TEXTBOOK PAGE ANALYSIS (from on-device OCR text) ─────────────────────
 
-  /// Step 1: Extract topic + concepts from a textbook photo.
-  Future<Map<String, dynamic>> analyzeTextbookImage(Uint8List imageBytes) async {
-    final raw = await _gemma.generateFromImage(
-      imageBytes: imageBytes,
-      prompt: 'Analyze this textbook image and extract the topic, key concepts, and difficulty level.',
-      systemPrompt: AgentPrompts.imageAnalysis(language: _lang),
+  /// Extract topic + concepts from the OCR text of a textbook photo.
+  ///
+  /// We do *not* use flutter_gemma's multimodal path: the `.litertlm` build of
+  /// gemma-4-E2B-it silently drops image inputs (flutter_gemma logs the message
+  /// as MessageType.text and the model replies "please provide an image"). The
+  /// scan screen runs Google ML Kit OCR locally and feeds the extracted page
+  /// text here as a normal text prompt — same JSON output, far better accuracy
+  /// than Gemma's vision tower would give anyway.
+  Future<Map<String, dynamic>> analyzeTextbookText(String pageText) async {
+    final raw = await _gemma.generate(
+      systemPrompt: AgentPrompts.textbookAnalysis(
+        language: _lang,
+        pageText: pageText,
+      ),
+      userPrompt:
+          'Analyze the page text above and return the JSON described.',
     );
     return _parseJson(raw);
-  }
-
-  /// Step 2: Generate a full story lesson from the analyzed image data.
-  Future<StoryResponse> generateStoryFromImage({
-    required Uint8List imageBytes,
-    required String style,
-    Franchise? franchise,
-    String franchiseName = '',
-  }) async {
-    final analysis = await analyzeTextbookImage(imageBytes);
-    final topic = analysis['topic'] as String? ?? 'Unknown Topic';
-    final level = analysis['level'] as String? ?? 'basics';
-
-    return generateStory(
-      topic: topic,
-      style: style,
-      franchise: franchise,
-      franchiseName: franchiseName,
-      level: level,
-    );
   }
 
   // ── STORY HELPERS ──────────────────────────────────────────────────────────
