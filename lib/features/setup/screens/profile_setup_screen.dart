@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/services/local_profile_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/ambient_background.dart';
 
 /// Creates a local profile (name + language + grade). No login required.
 class ProfileSetupScreen extends StatefulWidget {
@@ -60,11 +61,12 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundPrimary,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(28),
-          child: Column(
+      backgroundColor: Colors.transparent,
+      body: AmbientBackground(
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(28),
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 40),
@@ -152,6 +154,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 ),
               ),
             ],
+            ),
           ),
         ),
       ),
