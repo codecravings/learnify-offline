@@ -1,5 +1,4 @@
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -7,6 +6,7 @@ import '../../../core/ai/gemma_service.dart';
 import '../../../core/ai/model_downloader.dart';
 import '../../../core/services/local_profile_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/platform.dart';
 
 /// Downloads Gemma 4 E2B on first launch (~2.58 GB, one-time only).
 /// Shows animated progress with storage/requirement info.
