@@ -8,6 +8,7 @@ import '../../../core/services/local_profile_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../core/utils/platform.dart';
+import '../../../core/widgets/ambient_background.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../../core/widgets/particle_background.dart';
 
@@ -50,21 +51,19 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        children: [
-          Container(
-            decoration: const BoxDecoration(
-              gradient: AppTheme.backgroundGradient,
+      extendBody: true,
+      body: AmbientBackground(
+        child: Stack(
+          children: [
+            widget.child,
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _buildBottomNav(),
             ),
-          ),
-          widget.child,
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: _buildBottomNav(),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -500,7 +499,9 @@ class _HomeDashboardState extends State<HomeDashboard>
 
   Widget _buildHeroLearnCard() {
     return GlassContainer(
-      borderColor: AppTheme.accentCyan.withAlpha(60),
+      intensity: GlassIntensity.strong,
+      borderColor: AppTheme.accentCyan.withAlpha(80),
+      glow: PlatformX.isIOS ? AppTheme.accentCyan : null,
       padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
