@@ -1,9 +1,11 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/ai/gemma_service.dart';
 import '../core/services/local_profile_service.dart';
+import '../core/utils/platform.dart';
 import '../features/setup/screens/bootstrap_screen.dart';
 import '../features/setup/screens/model_download_screen.dart';
 import '../features/setup/screens/profile_setup_screen.dart';
@@ -28,6 +30,22 @@ abstract class AppRoutes {
   static const String scan = '/scan';
   static const String masteryPath = '/mastery-path';
   static const String userProfile = '/profile';
+}
+
+/// CupertinoPage on iOS (swipe-back for free), MaterialPage on Android.
+Page<T> _platformPage<T>(GoRouterState state, Widget child) {
+  if (PlatformX.isIOS) {
+    return CupertinoPage<T>(
+      key: state.pageKey,
+      name: state.name,
+      child: child,
+    );
+  }
+  return MaterialPage<T>(
+    key: state.pageKey,
+    name: state.name,
+    child: child,
+  );
 }
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -59,15 +77,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // ── Setup flow ────────────────────────────────────────────────────────
       GoRoute(
         path: AppRoutes.setup,
-        builder: (_, _) => const ModelDownloadScreen(),
+        pageBuilder: (_, state) =>
+            _platformPage(state, const ModelDownloadScreen()),
       ),
       GoRoute(
         path: AppRoutes.setupBootstrap,
-        builder: (_, _) => const BootstrapScreen(),
+        pageBuilder: (_, state) =>
+            _platformPage(state, const BootstrapScreen()),
       ),
       GoRoute(
         path: AppRoutes.setupProfile,
-        builder: (_, _) => const ProfileSetupScreen(),
+        pageBuilder: (_, state) =>
+            _platformPage(state, const ProfileSetupScreen()),
       ),
 
       // ── Home shell (bottom nav: Home / Companion / Profile) ───────────────
@@ -76,15 +97,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: AppRoutes.home,
-            builder: (_, _) => const HomeDashboard(),
+            pageBuilder: (_, state) =>
+                _platformPage(state, const HomeDashboard()),
           ),
           GoRoute(
             path: '/home/companion',
-            builder: (_, _) => const StudyCompanionScreen(),
+            pageBuilder: (_, state) =>
+                _platformPage(state, const StudyCompanionScreen()),
           ),
           GoRoute(
             path: '/home/profile',
-            builder: (_, _) => const ProfileScreen(),
+            pageBuilder: (_, state) =>
+                _platformPage(state, const ProfileScreen()),
           ),
         ],
       ),
@@ -135,7 +159,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // ── Scan / Mastery / Profile ─────────────────────────────────────────
       GoRoute(
         path: AppRoutes.scan,
-        builder: (_, _) => const ScanTextbookScreen(),
+        pageBuilder: (_, state) =>
+            _platformPage(state, const ScanTextbookScreen()),
       ),
       GoRoute(
         path: AppRoutes.masteryPath,
@@ -149,7 +174,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.userProfile,
-        builder: (_, _) => const ProfileScreen(),
+        pageBuilder: (_, state) => _platformPage(state, const ProfileScreen()),
       ),
     ],
   );
