@@ -4,13 +4,13 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../utils/platform.dart';
 
-/// Visual intensity tier for glass surfaces. iOS gets the heavier blur so
-/// it feels native; Android renders a tamer variant to keep frame pacing
-/// healthy during Gemma inference (BackdropFilter is GPU-heavy).
+/// Visual intensity tier for glass surfaces. iOS gets the heavier blur and
+/// sheen so it feels native; Android renders a tamer variant to keep frame
+/// pacing healthy during Gemma inference (BackdropFilter is GPU-heavy).
 enum GlassIntensity { subtle, medium, strong }
 
-/// Reusable glassmorphism container — backdrop-blur frosted surface that
-/// adapts to dark/light theme and animates with a spring tap-scale.
+/// Reusable glassmorphism container — backdrop-blur frosted surface with an
+/// inner top-edge highlight, a diagonal sheen, and optional spring tap-scale.
 ///
 /// API is backward-compatible with the old version: passing `blur:` still
 /// works as an explicit override. When `intensity` is given the blur sigma
@@ -29,6 +29,7 @@ class GlassContainer extends StatefulWidget {
     this.onTap,
     this.width,
     this.height,
+    this.glow,
   });
 
   final Widget child;
@@ -47,6 +48,9 @@ class GlassContainer extends StatefulWidget {
   final VoidCallback? onTap;
   final double? width;
   final double? height;
+
+  /// Optional accent glow color rendered as a soft outer halo.
+  final Color? glow;
 
   @override
   State<GlassContainer> createState() => _GlassContainerState();
@@ -115,33 +119,97 @@ class _GlassContainerState extends State<GlassContainer>
       borderRadius: radius,
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-        child: Container(
-          width: widget.width,
-          height: widget.height,
-          padding: widget.padding,
-          decoration: BoxDecoration(
-            borderRadius: radius,
-            border:
-                Border.all(color: effectiveBorder, width: widget.borderWidth),
-            gradient: LinearGradient(
-              colors: fillColors,
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+        child: Stack(
+          children: [
+            // Base frosted fill + border.
+            Container(
+              width: widget.width,
+              height: widget.height,
+              padding: widget.padding,
+              decoration: BoxDecoration(
+                borderRadius: radius,
+                border:
+                    Border.all(color: effectiveBorder, width: widget.borderWidth),
+                gradient: LinearGradient(
+                  colors: fillColors,
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                boxShadow: dark
+                    ? null
+                    : [
+                        BoxShadow(
+                          color: Colors.black.withAlpha(8),
+                          blurRadius: 12,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+              ),
+              child: widget.child,
             ),
-            boxShadow: dark
-                ? null
-                : [
-                    BoxShadow(
-                      color: Colors.black.withAlpha(8),
-                      blurRadius: 12,
-                      offset: const Offset(0, 2),
+            // Top-edge inner highlight — the bright wet rim iOS surfaces have.
+            if (dark)
+              IgnorePointer(
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: radius,
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.white.withAlpha(22),
+                        Colors.white.withAlpha(0),
+                      ],
+                      stops: const [0, 0.18],
                     ),
-                  ],
-          ),
-          child: widget.child,
+                  ),
+                ),
+              ),
+            // Diagonal sheen — adds depth on iOS, subtle on Android.
+            if (PlatformX.isIOS)
+              IgnorePointer(
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: radius,
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Colors.white.withAlpha(dark ? 18 : 60),
+                        Colors.white.withAlpha(0),
+                        Colors.white.withAlpha(0),
+                      ],
+                      stops: const [0, 0.35, 1],
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
+
+    // Optional outer glow halo.
+    if (widget.glow != null) {
+      glass = DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          boxShadow: [
+            BoxShadow(
+              color: widget.glow!.withAlpha(60),
+              blurRadius: 24,
+              spreadRadius: 1,
+            ),
+            BoxShadow(
+              color: widget.glow!.withAlpha(20),
+              blurRadius: 40,
+              spreadRadius: 4,
+            ),
+          ],
+        ),
+        child: glass,
+      );
+    }
 
     if (widget.margin != null) {
       glass = Padding(padding: widget.margin!, child: glass);
