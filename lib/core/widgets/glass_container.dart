@@ -232,3 +232,68 @@ class _GlassContainerState extends State<GlassContainer>
     return glass;
   }
 }
+
+/// Bottom-bar / overlay glass panel. Same frosted surface as [GlassContainer]
+/// but optimized for a long horizontal strip with a single top hairline and
+/// no rounded clip on the bottom edge (so it can hug the safe area).
+class GlassPanel extends StatelessWidget {
+  const GlassPanel({
+    super.key,
+    required this.child,
+    this.intensity = GlassIntensity.strong,
+    this.topRadius = 24,
+    this.padding,
+  });
+
+  final Widget child;
+  final GlassIntensity intensity;
+  final double topRadius;
+  final EdgeInsetsGeometry? padding;
+
+  double _resolveBlur() {
+    final ios = PlatformX.isIOS;
+    switch (intensity) {
+      case GlassIntensity.subtle:
+        return ios ? 18 : 10;
+      case GlassIntensity.medium:
+        return ios ? 28 : 14;
+      case GlassIntensity.strong:
+        return ios ? 40 : 18;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = AppTheme.isDark(context);
+    final blur = _resolveBlur();
+    final shape = BorderRadius.only(
+      topLeft: Radius.circular(topRadius),
+      topRight: Radius.circular(topRadius),
+    );
+
+    return ClipRRect(
+      borderRadius: shape,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            borderRadius: shape,
+            color: dark
+                ? AppTheme.backgroundPrimary.withAlpha(140)
+                : Colors.white.withAlpha(180),
+            border: Border(
+              top: BorderSide(
+                color: dark
+                    ? Colors.white.withAlpha(40)
+                    : Colors.black.withAlpha(20),
+                width: 0.5,
+              ),
+            ),
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
