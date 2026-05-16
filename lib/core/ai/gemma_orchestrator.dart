@@ -875,19 +875,127 @@ You are about to receive a turn instruction telling you what to do next. Follow 
         .map((t) => t['name'] as String)
         .take(10)
         .join(', ');
+    final stepCount = masteryStepsForLevel(level);
+    final systemPrompt = AgentPrompts.mastery(
+      topic: topic,
+      level: level,
+      pastConcepts: pastConcepts.isEmpty ? 'none yet' : pastConcepts,
+      language: _lang,
+      targetStepCount: stepCount,
+    );
 
-    final raw = await _gemma.generate(
-      systemPrompt: AgentPrompts.mastery(
+    Future<String> ask(String userPrompt) =>
+        _gemma.generate(systemPrompt: systemPrompt, userPrompt: userPrompt);
+
+    String? lastRaw;
+    // Two attempts. The small E2B model fails this call in three distinct
+    // ways and the retry has to defend against all of them:
+    //   1. Drops a closing brace (~20% of the time) → _parseJson throws.
+    //   2. Writes a tutoring essay ignoring the JSON ask → _parseJson throws.
+    //   3. Returns *valid* JSON with the wrong schema (`{"summary": ...}`)
+    //      because the previous chat call's context bled through flutter_
+    //      gemma's shared KV cache. _parseJson succeeds but `steps` is
+    //      missing — the screen would fail downstream. Validate shape so
+    //      we catch this here, retry with the schema spelled out, then
+    //      fall through to the prose salvage.
+    final retries = <String>[
+      'Output the JSON now. First character is "{". No prose, no markdown.',
+      'JSON only. The top-level object MUST have these keys: '
+          '"topic", "steps" (array of $stepCount step objects), '
+          '"estimated_minutes". DO NOT use a "summary" key.',
+    ];
+    for (final user in retries) {
+      try {
+        final raw = await ask(user);
+        lastRaw = raw;
+        final decoded = _parseJson(raw);
+        if (_isValidMasteryShape(decoded)) return decoded;
+        debugPrint('[Mastery] parsed but wrong shape: keys=${decoded.keys.toList()}');
+      } catch (e) {
+        debugPrint('[Mastery] JSON parse failed: $e');
+      }
+    }
+
+    // Last-resort fallback: the model wrote a clean prose roadmap with
+    // "Stage N: title" / "**Step N: title**" patterns. Salvage it into
+    // mastery-step shape so the user sees a usable path instead of an error.
+    if (lastRaw != null) {
+      final salvaged = _salvageMasteryFromProse(
+        prose: lastRaw,
         topic: topic,
         level: level,
-        pastConcepts: pastConcepts.isEmpty ? 'none yet' : pastConcepts,
-        language: _lang,
-        targetStepCount: masteryStepsForLevel(level),
-      ),
-      userPrompt: 'Decompose "$topic" into a mastery path.',
-      maxTokens: 1500,
+        targetStepCount: stepCount,
+      );
+      if (salvaged != null) {
+        debugPrint('[Mastery] salvaged ${salvaged['steps']?.length ?? 0} steps from prose');
+        return salvaged;
+      }
+    }
+    throw const FormatException('Mastery agent returned no parseable path');
+  }
+
+  /// True when [decoded] looks like a valid mastery-path JSON. Small-model
+  /// failure mode #3 (wrong-schema) returns `{"summary": "..."}` — valid
+  /// JSON, useless to us. We require a non-empty `steps` array of objects.
+  bool _isValidMasteryShape(Map<String, dynamic> decoded) {
+    final steps = decoded['steps'];
+    if (steps is! List || steps.isEmpty) return false;
+    return steps.first is Map;
+  }
+
+  /// Best-effort recovery when the Mastery agent ignores the JSON
+  /// instruction and emits markdown prose like:
+  ///
+  ///     **Stage 1: Python Fundamentals**
+  ///     *   Topics: ...
+  ///
+  /// Pulls headings that look like step titles, deduplicates, and packs
+  /// them back into the same shape `_parseJson` would have returned.
+  /// Returns null when fewer than 3 plausible steps can be extracted.
+  Map<String, dynamic>? _salvageMasteryFromProse({
+    required String prose,
+    required String topic,
+    required String level,
+    required int targetStepCount,
+  }) {
+    final headingRe = RegExp(
+      r'^[\s*#>-]*\**\s*(?:stage|step|phase|module|part|chapter)\s*\d+\s*[:.\-]\s*([^\n*]+)',
+      multiLine: true,
+      caseSensitive: false,
     );
-    return _parseJson(raw);
+    final raw = headingRe
+        .allMatches(prose)
+        .map((m) => m.group(1)!.replaceAll(RegExp(r'\*+$'), '').trim())
+        .where((t) => t.isNotEmpty)
+        .toList();
+    final seen = <String>{};
+    final titles = <String>[];
+    for (final t in raw) {
+      final key = t.toLowerCase();
+      if (seen.add(key)) titles.add(t);
+    }
+    if (titles.length < 3) return null;
+    final picks = titles.take(targetStepCount).toList();
+    return {
+      'topic': topic,
+      'steps': [
+        for (var i = 0; i < picks.length; i++)
+          {
+            'index': i,
+            'title': picks[i],
+            'description': '',
+            'concepts': const <String>[],
+            'difficulty': i < picks.length / 3
+                ? 'basics'
+                : i < 2 * picks.length / 3
+                    ? 'intermediate'
+                    : 'advanced',
+          },
+      ],
+      'estimated_minutes': picks.length * 8,
+      'prerequisite_concepts': const <String>[],
+      '_recovered_from_prose': true,
+    };
   }
 
   // ── ORCHESTRATOR (intent routing) ─────────────────────────────────────────
