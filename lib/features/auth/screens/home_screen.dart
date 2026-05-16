@@ -77,15 +77,61 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: EdgeInsets.only(
         top: 10,
         bottom: bottomPadding + 10,
-        left: 8,
-        right: 8,
+        left: 10,
+        right: 10,
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: List.generate(_tabs.length, (i) {
-          final isSelected = i == current;
-          return _buildNavItem(_tabs[i], isSelected, () => _onTabTap(i));
-        }),
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final itemWidth = c.maxWidth / _tabs.length;
+          return Stack(
+            alignment: Alignment.centerLeft,
+            children: [
+              // Animated pill behind the selected tab.
+              AnimatedPositioned(
+                duration: PlatformX.motionMedium,
+                curve: PlatformX.springCurve,
+                left: itemWidth * current + 10,
+                top: 4,
+                bottom: 4,
+                width: itemWidth - 20,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(18),
+                    gradient: LinearGradient(
+                      colors: [
+                        AppTheme.accentCyan.withAlpha(60),
+                        AppTheme.accentPurple.withAlpha(60),
+                      ],
+                    ),
+                    border: Border.all(
+                      color: AppTheme.accentCyan.withAlpha(100),
+                      width: 0.8,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.accentCyan.withAlpha(40),
+                        blurRadius: 16,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Row(
+                children: List.generate(_tabs.length, (i) {
+                  final isSelected = i == current;
+                  return Expanded(
+                    child: _buildNavItem(
+                      _tabs[i],
+                      isSelected,
+                      () => _onTabTap(i),
+                    ),
+                  );
+                }),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -98,33 +144,23 @@ class _HomeScreenState extends State<HomeScreen> {
         onTap();
       },
       behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              decoration: isSelected
-                  ? BoxDecoration(
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppTheme.accentCyan.withAlpha(90),
-                          blurRadius: 16,
-                          spreadRadius: 2,
-                        ),
-                      ],
-                    )
-                  : null,
-              child: Icon(tab.icon, color: color, size: 24),
+            AnimatedScale(
+              duration: PlatformX.motionFast,
+              curve: PlatformX.springCurve,
+              scale: isSelected ? 1.08 : 1.0,
+              child: Icon(tab.icon, color: color, size: 23),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 3),
             Text(
               tab.label,
               style: GoogleFonts.spaceGrotesk(
                 fontSize: 10,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                 color: color,
               ),
             ),
