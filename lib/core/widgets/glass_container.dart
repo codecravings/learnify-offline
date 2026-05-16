@@ -2,13 +2,25 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../utils/platform.dart';
 
-/// Reusable glassmorphism container — adapts to dark/light theme.
-class GlassContainer extends StatelessWidget {
+/// Visual intensity tier for glass surfaces. iOS gets the heavier blur so
+/// it feels native; Android renders a tamer variant to keep frame pacing
+/// healthy during Gemma inference (BackdropFilter is GPU-heavy).
+enum GlassIntensity { subtle, medium, strong }
+
+/// Reusable glassmorphism container — backdrop-blur frosted surface that
+/// adapts to dark/light theme and animates with a spring tap-scale.
+///
+/// API is backward-compatible with the old version: passing `blur:` still
+/// works as an explicit override. When `intensity` is given the blur sigma
+/// is chosen per-platform (heavier on iOS).
+class GlassContainer extends StatefulWidget {
   const GlassContainer({
     super.key,
     required this.child,
-    this.blur = 10,
+    this.intensity = GlassIntensity.medium,
+    this.blur,
     this.borderRadius = 16,
     this.borderColor,
     this.borderWidth = 0.8,
@@ -20,7 +32,13 @@ class GlassContainer extends StatelessWidget {
   });
 
   final Widget child;
-  final double blur;
+
+  /// Platform-aware blur tier. Ignored when [blur] is provided.
+  final GlassIntensity intensity;
+
+  /// Explicit blur sigma override (legacy API). Overrides [intensity].
+  final double? blur;
+
   final double borderRadius;
   final Color? borderColor;
   final double borderWidth;
@@ -31,28 +49,82 @@ class GlassContainer extends StatelessWidget {
   final double? height;
 
   @override
+  State<GlassContainer> createState() => _GlassContainerState();
+}
+
+class _GlassContainerState extends State<GlassContainer>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _scaleCtrl;
+  bool _pressed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scaleCtrl = AnimationController(
+      vsync: this,
+      duration: PlatformX.motionFast,
+      lowerBound: 0.96,
+      upperBound: 1.0,
+      value: 1.0,
+    );
+  }
+
+  @override
+  void dispose() {
+    _scaleCtrl.dispose();
+    super.dispose();
+  }
+
+  double _resolveBlur() {
+    if (widget.blur != null) return widget.blur!;
+    final ios = PlatformX.isIOS;
+    switch (widget.intensity) {
+      case GlassIntensity.subtle:
+        return ios ? 16 : 8;
+      case GlassIntensity.medium:
+        return ios ? 24 : 12;
+      case GlassIntensity.strong:
+        return ios ? 36 : 16;
+    }
+  }
+
+  void _setPressed(bool v) {
+    if (v == _pressed) return;
+    _pressed = v;
+    if (v) {
+      _scaleCtrl.animateTo(0.96, curve: PlatformX.springCurve);
+    } else {
+      _scaleCtrl.animateTo(1.0, curve: PlatformX.springCurve);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final dark = AppTheme.isDark(context);
-    final effectiveBorder =
-        borderColor ?? (dark ? AppTheme.glassBorder : AppTheme.lightGlassBorder);
+    final effectiveBorder = widget.borderColor ??
+        (dark ? AppTheme.glassBorder : AppTheme.lightGlassBorder);
 
-    final gradientColors = dark
+    final fillColors = dark
         ? [Colors.white.withAlpha(26), Colors.white.withAlpha(13)]
         : [Colors.white.withAlpha(200), Colors.white.withAlpha(140)];
 
+    final blur = _resolveBlur();
+    final radius = BorderRadius.circular(widget.borderRadius);
+
     Widget glass = ClipRRect(
-      borderRadius: BorderRadius.circular(borderRadius),
+      borderRadius: radius,
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
         child: Container(
-          width: width,
-          height: height,
-          padding: padding,
+          width: widget.width,
+          height: widget.height,
+          padding: widget.padding,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(borderRadius),
-            border: Border.all(color: effectiveBorder, width: borderWidth),
+            borderRadius: radius,
+            border:
+                Border.all(color: effectiveBorder, width: widget.borderWidth),
             gradient: LinearGradient(
-              colors: gradientColors,
+              colors: fillColors,
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -66,20 +138,26 @@ class GlassContainer extends StatelessWidget {
                     ),
                   ],
           ),
-          child: child,
+          child: widget.child,
         ),
       ),
     );
 
-    if (margin != null) {
-      glass = Padding(padding: margin!, child: glass);
+    if (widget.margin != null) {
+      glass = Padding(padding: widget.margin!, child: glass);
     }
 
-    if (onTap != null) {
+    if (widget.onTap != null) {
       glass = GestureDetector(
-        onTap: onTap,
         behavior: HitTestBehavior.opaque,
-        child: glass,
+        onTapDown: (_) => _setPressed(true),
+        onTapUp: (_) => _setPressed(false),
+        onTapCancel: () => _setPressed(false),
+        onTap: () {
+          PlatformX.tapHaptic();
+          widget.onTap!();
+        },
+        child: ScaleTransition(scale: _scaleCtrl, child: glass),
       );
     }
 
