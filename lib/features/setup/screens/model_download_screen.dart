@@ -7,6 +7,7 @@ import '../../../core/ai/model_downloader.dart';
 import '../../../core/services/local_profile_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/platform.dart';
+import '../../../core/widgets/ambient_background.dart';
 
 /// Downloads Gemma 4 E2B on first launch (~2.58 GB, one-time only).
 /// Shows animated progress with storage/requirement info.
@@ -206,13 +207,14 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundPrimary,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+      backgroundColor: Colors.transparent,
+      body: AmbientBackground(
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
               const SizedBox(height: 40),
               // Gemma logo / branding
               AnimatedBuilder(
@@ -375,6 +377,7 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen>
                 ),
               ],
             ],
+            ),
           ),
         ),
       ),
