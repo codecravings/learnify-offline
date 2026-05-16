@@ -382,6 +382,7 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen>
 class _RequirementCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final ios = PlatformX.isIOS;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -392,11 +393,20 @@ class _RequirementCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Requirements', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
+          const Text(
+            'Requirements',
+            style: TextStyle(
+                color: Colors.white70, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 12),
           _req('Storage', '~3 GB free space'),
-          _req('RAM', '4 GB+ recommended'),
-          _req('GPU', 'Accelerated on most Android phones'),
+          _req('RAM', '6 GB+ recommended'),
+          _req(
+            'Hardware',
+            ios
+                ? 'Accelerated on Apple Silicon (iPhone 13 Pro and newer)'
+                : 'Accelerated on most Android phones',
+          ),
           _req('Internet', 'Only for this one-time download'),
         ],
       ),
