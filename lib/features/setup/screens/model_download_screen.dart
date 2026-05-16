@@ -366,8 +366,11 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen>
                 const SizedBox(height: 12),
                 Center(
                   child: Text(
-                    'One-time download. Or import a model file you already have.',
-                    style: TextStyle(color: Colors.white38, fontSize: 12),
+                    PlatformX.isIOS
+                        ? 'One-time download. Or open Files → On My iPhone → Learnify and drop a .litertlm there.'
+                        : 'One-time download. Or import a model file you already have.',
+                    style: const TextStyle(color: Colors.white38, fontSize: 12),
+                    textAlign: TextAlign.center,
                   ),
                 ),
               ],
