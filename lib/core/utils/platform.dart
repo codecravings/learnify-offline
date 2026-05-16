@@ -1,5 +1,6 @@
 import 'dart:io' show Platform;
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -38,4 +39,26 @@ class PlatformX {
       HapticFeedback.heavyImpact();
     }
   }
+}
+
+/// Returns a [CupertinoPageRoute] on iOS (gets swipe-back for free) and a
+/// [MaterialPageRoute] on Android. Use at every `Navigator.push` call site
+/// that currently builds a route inline.
+PageRoute<T> platformPageRoute<T>({
+  required WidgetBuilder builder,
+  RouteSettings? settings,
+  bool fullscreenDialog = false,
+}) {
+  if (PlatformX.isIOS) {
+    return CupertinoPageRoute<T>(
+      builder: builder,
+      settings: settings,
+      fullscreenDialog: fullscreenDialog,
+    );
+  }
+  return MaterialPageRoute<T>(
+    builder: builder,
+    settings: settings,
+    fullscreenDialog: fullscreenDialog,
+  );
 }
