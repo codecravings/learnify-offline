@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -9,6 +7,7 @@ import '../../../core/ai/gemma_orchestrator.dart';
 import '../../../core/services/local_profile_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_provider.dart';
+import '../../../core/utils/platform.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../../core/widgets/particle_background.dart';
 
@@ -74,30 +73,19 @@ class _HomeScreenState extends State<HomeScreen> {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
     final current = _currentIndex;
 
-    return ClipRRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          padding: EdgeInsets.only(
-            top: 10,
-            bottom: bottomPadding + 10,
-            left: 8,
-            right: 8,
-          ),
-          decoration: BoxDecoration(
-            color: AppTheme.backgroundPrimary.withAlpha(180),
-            border: Border(
-              top: BorderSide(color: AppTheme.glassBorder, width: 0.5),
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: List.generate(_tabs.length, (i) {
-              final isSelected = i == current;
-              return _buildNavItem(_tabs[i], isSelected, () => _onTabTap(i));
-            }),
-          ),
-        ),
+    return GlassPanel(
+      padding: EdgeInsets.only(
+        top: 10,
+        bottom: bottomPadding + 10,
+        left: 8,
+        right: 8,
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: List.generate(_tabs.length, (i) {
+          final isSelected = i == current;
+          return _buildNavItem(_tabs[i], isSelected, () => _onTabTap(i));
+        }),
       ),
     );
   }
@@ -105,7 +93,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildNavItem(_NavTab tab, bool isSelected, VoidCallback onTap) {
     final color = isSelected ? AppTheme.accentCyan : AppTheme.textTertiary;
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        PlatformX.tapHaptic();
+        onTap();
+      },
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
