@@ -116,16 +116,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // ── Story Learn (custom topic or mastery-path step) ──────────────────
       GoRoute(
         path: AppRoutes.lesson,
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final extra = state.extra as Map<String, dynamic>? ?? {};
-          return StoryScreen(
-            customTopic: extra['customTopic'] as String?,
-            preselectedLevel:
-                (extra['preselectedLevel'] ?? extra['level']) as String?,
-            preselectedStyle: extra['preselectedStyle'] as String?,
-            franchiseName: extra['franchiseName'] as String?,
-            pathTopicKey: extra['pathTopicKey'] as String?,
-            pathStepIndex: extra['pathStepIndex'] as int?,
+          return _platformPage(
+            state,
+            StoryScreen(
+              customTopic: extra['customTopic'] as String?,
+              preselectedLevel:
+                  (extra['preselectedLevel'] ?? extra['level']) as String?,
+              preselectedStyle: extra['preselectedStyle'] as String?,
+              franchiseName: extra['franchiseName'] as String?,
+              pathTopicKey: extra['pathTopicKey'] as String?,
+              pathStepIndex: extra['pathStepIndex'] as int?,
+            ),
           );
         },
       ),
@@ -133,25 +136,31 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // ── Feynman "Teach it back" mode ─────────────────────────────────────
       GoRoute(
         path: AppRoutes.feynman,
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final extra = state.extra as Map<String, dynamic>? ?? {};
           final topic = extra['topic'] as String? ?? '';
           final franchise = extra['franchise'] as Franchise?;
           final character = extra['character'] as FranchisePersona?;
           if (franchise == null || character == null || topic.isEmpty) {
-            return const Scaffold(
-              body: Center(
-                child: Text(
-                  'Feynman session needs a franchise + character.',
-                  style: TextStyle(color: Colors.white70),
+            return _platformPage(
+              state,
+              const Scaffold(
+                body: Center(
+                  child: Text(
+                    'Feynman session needs a franchise + character.',
+                    style: TextStyle(color: Colors.white70),
+                  ),
                 ),
               ),
             );
           }
-          return FeynmanScreen(
-            topic: topic,
-            franchise: franchise,
-            character: character,
+          return _platformPage(
+            state,
+            FeynmanScreen(
+              topic: topic,
+              franchise: franchise,
+              character: character,
+            ),
           );
         },
       ),
@@ -164,11 +173,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.masteryPath,
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final extra = state.extra as Map<String, dynamic>? ?? {};
-          return MasteryPathScreen(
-            topic: extra['topic'] as String? ?? '',
-            level: extra['level'] as String? ?? 'basics',
+          return _platformPage(
+            state,
+            MasteryPathScreen(
+              topic: extra['topic'] as String? ?? '',
+              level: extra['level'] as String? ?? 'basics',
+            ),
           );
         },
       ),
