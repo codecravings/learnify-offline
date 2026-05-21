@@ -156,7 +156,7 @@ flutter run -d <DEVICE_ID> --dart-define=HF_TOKEN=<token>
 ### 📱 Device Requirements
 
 ✅ Android 12+ (`minSdk = 31`, hard requirement for LiteRT-LM)
-✅ ≥ 6 GB RAM
+✅ ≥ 4 GB RAM
 ✅ ≥ 5 GB free storage (model is ~2.58 GB + temp copy during install)
 
 ---
